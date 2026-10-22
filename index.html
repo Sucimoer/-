@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>澪鸢 · 全网影视搜索</title>
-
+<link rel="icon" href="https://kkimgs.yisou.com/ims?kt=url&at=ori&key=aHR0cDovL2kwLmhkc2xiLmNvbS9iZnMvYXJ0aWNsZS9lNjU2NjA0MTVkNWVhNGMwYjQyN2EzOTMyNzhkYjQyZThkODhhOGNmLmpwZ0AxMzIwd18xMTIyaC53ZWJw&sign=yx:Jt2lZEU6w_707iVxcbRkDJfZ6ss=&tv=0_0">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://cdn.staticfile.org" crossorigin>
@@ -103,9 +103,7 @@ body{
 }
 .brand .mark{
   display:grid;place-items:center;width:28px;height:28px;border-radius:9px;
-  background:linear-gradient(135deg,var(--brand),var(--brand2));
-  color:#04140b;font-size:11px;padding-left:2px;
-  box-shadow:0 6px 18px rgba(0,210,106,.35);
+    object-fit: cover; /* 保证图片不变形 */
 }
 .search-wrap{flex:1;max-width:640px;margin:0 auto;position:relative;min-width:0}
 .searchbar{
@@ -1929,7 +1927,8 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
 
 <header class="top">
   <div class="brand" onclick="goHome()">
-    <span class="mark">▶</span><span>澪鸢</span>
+    <img class="mark" src="https://kkimgs.yisou.com/ims?kt=url&at=ori&key=aHR0cDovL2kwLmhkc2xiLmNvbS9iZnMvYXJ0aWNsZS9lNjU2NjA0MTVkNWVhNGMwYjQyN2EzOTMyNzhkYjQyZThkODhhOGNmLmpwZ0AxMzIwd18xMTIyaC53ZWJw&sign=yx:Jt2lZEU6w_707iVxcbRkDJfZ6ss=&tv=0_0" alt="logo">
+    <span>澪鸢</span>
   </div>
   <div class="search-wrap">
     <div class="searchbar">
