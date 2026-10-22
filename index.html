@@ -103,7 +103,7 @@ body{
 }
 .brand .mark{
   display:grid;place-items:center;width:28px;height:28px;border-radius:9px;
-    object-fit: cover; /* 保证图片不变形 */
+    object-fit: cover;
 }
 .search-wrap{flex:1;max-width:640px;margin:0 auto;position:relative;min-width:0}
 .searchbar{
@@ -940,43 +940,15 @@ body.pseudo-fs-lock{overflow:hidden;height:100vh}
 .clear-btn.danger:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none;filter:none;}
 
 @media (max-width: 720px){
-  .top{
-    padding:8px 8px;
-    gap:5px;
-    flex-wrap:nowrap;
-  }
-  .top .brand{flex:0 0 auto;}
-  .top .brand{font-size:16px;gap:6px}
+  .top{padding:8px 8px;gap:5px;flex-wrap:nowrap;}
+  .top .brand{flex:0 0 auto;font-size:16px;gap:6px}
   .top .brand .mark{width:24px;height:24px;border-radius:8px;font-size:10px}
   .top .brand span:last-child{display:none}
-
-  .top .search-wrap{
-    flex:1 1 auto;
-    min-width:0;
-    margin:0 2px;
-    max-width:none;
-  }
+  .top .search-wrap{flex:1 1 auto;min-width:0;margin:0 2px;max-width:none;}
   .top .searchbar{padding:3px;min-width:0}
-  .top .searchbar input{
-    min-width:0;
-    padding:8px 10px;
-    font-size:13px;
-  }
-  .top .searchbar button{
-    flex:0 0 auto;
-    padding:8px 12px;
-    font-size:12.5px;
-    font-weight:700;
-  }
-
-  .top .icon-btn{
-    flex:0 0 auto;
-    width:32px;
-    height:32px;
-    border-radius:9px;
-    font-size:14px;
-  }
-
+  .top .searchbar input{min-width:0;padding:8px 10px;font-size:13px;}
+  .top .searchbar button{flex:0 0 auto;padding:8px 12px;font-size:12.5px;font-weight:700;}
+  .top .icon-btn{flex:0 0 auto;width:32px;height:32px;border-radius:9px;font-size:14px;}
   main{padding:12px 10px 60px}
   .home-hero{padding:44px 12px 36px}
   .home-hero h1{font-size:24px;letter-spacing:-.5px;margin-bottom:10px}
@@ -1298,7 +1270,6 @@ html.dark {
   --ai-shadow: var(--ai-shadow-dark);
 }
 
-/* 悬浮按钮 */
 .ai-fab {
   position: fixed;
   right: 22px;
@@ -1317,10 +1288,9 @@ html.dark {
   box-shadow: 0 12px 30px rgba(245, 76, 122, 0.38);
   transition: transform 0.3s var(--ai-ease), box-shadow 0.3s var(--ai-ease);
   overflow: visible;
-  background: none; /* 去掉原来的粉色渐变背景 */
-  padding: 0;       /* 清除内边距 */
+  background: none;
+  padding: 0;
 }
-/* 新增图片自适应样式 */
 .ai-fab img {
   width: 100%;
   height: 100%;
@@ -1351,7 +1321,6 @@ html.dark {
   50% { transform: scale(1.35); opacity: 0.6; }
 }
 
-/* 面板主体 */
 .ai-panel {
   position: fixed;
   right: 22px;
@@ -1380,7 +1349,6 @@ html.dark {
   to { opacity: 1; transform: none; }
 }
 
-/* 头部 */
 .ai-head {
   display: flex;
   align-items: center;
@@ -1399,18 +1367,16 @@ html.dark {
   background: linear-gradient(135deg, var(--ai-pink), var(--ai-rose));
   box-shadow: 0 6px 16px rgba(245, 76, 122, 0.28);
   flex-shrink: 0;
-  background: none; /* 去掉原来的粉色渐变背景 */
+  background: none;
   padding: 0;
 }
-/* 新增图片自适应样式 */
 .ai-head-ava img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
-  border-radius: 14px; /* 和头部头像原本的圆角保持一致 */
+  border-radius: 14px;
 }
-/* 补回的文本容器样式 */
 .ai-head-txt {
   flex: 1;
   min-width: 0;
@@ -1450,7 +1416,6 @@ html.dark .ai-icon-btn:hover {
   background: rgba(255, 255, 255, 0.1);
 }
 
-/* 消息区 */
 .ai-msgs {
   flex: 1;
   overflow-y: auto;
@@ -1515,7 +1480,6 @@ html.dark .ai-msg.bot .ai-bubble {
   padding: 0 4px;
 }
 
-/* 快捷指令 */
 .ai-chips {
   display: flex;
   gap: 7px;
@@ -1548,7 +1512,6 @@ html.dark .ai-chip {
   transform: translateY(-1px);
 }
 
-/* 输入区 */
 .ai-input-wrap {
   display: flex;
   align-items: flex-end;
@@ -1610,7 +1573,6 @@ html.dark .ai-input {
   transform: scale(0.94);
 }
 
-/* 设置抽屉 */
 .ai-cfg {
   position: absolute;
   inset: 0;
@@ -1788,7 +1750,6 @@ html.dark .ai-field {
     padding: 8px 10px 12px;
   }
 }
-/* ===== AI 已保存的模型配置列表（多选版）===== */
 .ai-saved-models { margin: 14px 0 6px; }
 
 .ai-saved-title {
@@ -1842,14 +1803,12 @@ html.dark .ai-field {
 html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
 .ai-saved-item:hover { transform: translateY(-1px); }
 
-/* 已勾选（参与并行） */
 .ai-saved-item.on {
   border-color: rgba(255, 114, 225, .55);
   background: rgba(255, 114, 225, .10);
 }
 .ai-saved-item.on .ai-saved-name { color: var(--ai-pink); }
 
-/* 正在编辑中 */
 .ai-saved-item.current {
   box-shadow: 0 0 0 2px rgba(0, 176, 255, .25);
   border-color: rgba(0, 176, 255, .55);
@@ -1887,7 +1846,6 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
   border-color: rgba(255, 91, 127, .35);
 }
 
-/* ===== 云端同步状态提示 ===== */
 .ai-sync-hint {
   margin-top: 10px; padding: 8px 12px;
   border-radius: 10px; font-size: 11px; line-height: 1.6;
@@ -1913,8 +1871,115 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
   .ai-multi-badge { font-size: 10px; }
   .ai-sync-hint { font-size: 10.5px; padding: 7px 10px; }
 }
+
+/* =========================================
+ *  ★ 新增：观影派对 / 弹幕 / 离线缓存样式
+ * ========================================= */
+
+/* ---------- 弹幕层 ---------- */
+.danmaku-layer{
+  position:absolute;inset:0;z-index:15;pointer-events:none;overflow:hidden;
+}
+.dm-item{
+  position:absolute;white-space:nowrap;
+  font-size:18px;font-weight:600;line-height:1.2;
+  text-shadow:0 1px 3px rgba(0,0,0,.95),0 0 2px rgba(0,0,0,.9);
+  will-change:transform;pointer-events:none;
+  animation:dmScroll linear forwards;
+}
+.dm-item.self{ text-shadow:0 0 6px rgba(0,210,106,.9),0 1px 3px #000; }
+@keyframes dmScroll{
+  from{ transform:translateX(100vw); }
+  to  { transform:translateX(-100%); }
+}
+.v-danmaku-row{
+  display:flex;gap:8px;padding:6px 0 2px;
+}
+.v-danmaku-input{
+  flex:1;min-width:0;padding:8px 12px;border-radius:8px;
+  background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.18);
+  color:#fff;font-size:13px;font-family:inherit;outline:none;
+}
+.v-danmaku-input:focus{ border-color:rgba(0,210,106,.6); }
+.v-danmaku-send{
+  padding:8px 16px;border-radius:8px;border:0;cursor:pointer;
+  font-size:13px;font-weight:700;font-family:inherit;
+  background:linear-gradient(135deg,var(--brand),var(--brand2));color:#04140b;
+}
+@media (max-width:720px){
+  .dm-item{ font-size:14px; }
+  .v-danmaku-input{ font-size:12.5px;padding:7px 10px; }
+  .v-danmaku-send{ font-size:12.5px;padding:7px 12px; }
+}
+
+/* ---------- 观影派对面板 ---------- */
+.party-row{ display:flex;align-items:center;gap:10px;padding:10px 0; }
+.party-row + .party-row{ border-top:1px solid var(--line); }
+.party-code{
+  font-family:ui-monospace,Menlo,Consolas,monospace;font-size:20px;
+  letter-spacing:3px;color:var(--brand);font-weight:800;
+  padding:10px 16px;border-radius:10px;text-align:center;
+  background:rgba(0,210,106,.08);border:1px dashed rgba(0,210,106,.45);
+  user-select:all;cursor:copy;
+}
+.party-member{
+  display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;
+  background:rgba(255,255,255,.04);border:1px solid var(--line);
+  font-size:13.5px;margin-bottom:6px;
+}
+.party-member .dot{ width:8px;height:8px;border-radius:50%;background:var(--brand); }
+.party-member .av{ width:26px;height:26px;border-radius:8px;display:grid;place-items:center;
+  background:rgba(255,255,255,.06);font-size:14px;overflow:hidden; }
+.party-member .av img{ width:100%;height:100%;object-fit:cover; }
+.party-member .nm{ flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+
+/* ---------- 离线片库 ---------- */
+.off-list{ display:flex;flex-direction:column;gap:8px;padding:14px 20px;max-height:60vh;overflow-y:auto; }
+.off-item{
+  display:flex;gap:12px;padding:10px;border-radius:12px;
+  background:rgba(255,255,255,.035);border:1px solid var(--line);
+  transition:.2s;
+}
+.off-item:hover{ background:rgba(0,210,106,.07);border-color:rgba(0,210,106,.3); }
+.off-poster{ width:52px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#1a2130; }
+.off-poster img{ width:100%;height:100%;object-fit:cover; }
+.off-info{ flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px; }
+.off-name{ font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+.off-meta{ font-size:11.5px;color:var(--muted); }
+.off-acts{ display:flex;gap:6px;align-items:center;flex-shrink:0; }
+.off-acts button{
+  padding:6px 12px;border-radius:8px;font-size:12px;font-family:inherit;
+  font-weight:600;cursor:pointer;transition:.2s;
+  background:rgba(255,255,255,.05);border:1px solid var(--line);color:#c8d2e2;
+}
+.off-acts button:hover{ color:#fff;background:rgba(0,210,106,.15);border-color:rgba(0,210,106,.4); }
+.off-acts button.danger:hover{ background:rgba(255,107,107,.15);border-color:rgba(255,107,107,.4);color:#ff9a9a; }
+.off-empty{ padding:40px 20px;text-align:center;color:var(--muted);font-size:13px;line-height:1.8; }
+
+/* ---------- 缓存进度提示 ---------- */
+#cacheToast{
+  position:fixed;left:50%;bottom:80px;transform:translateX(-50%);
+  z-index:9998;width:min(380px,90vw);
+  background:rgba(18,22,30,.97);border:1px solid rgba(0,210,106,.35);
+  border-radius:14px;padding:12px 14px;
+  box-shadow:0 20px 50px rgba(0,0,0,.7);
+}
+.cache-toast-inner{ display:flex;flex-direction:column;gap:8px; }
+.cache-toast-txt{ font-size:13px;color:#e9eef7;font-weight:600; }
+.cache-toast-bar{
+  height:5px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden;
+}
+.cache-toast-bar i{
+  display:block;height:100%;width:0;
+  background:linear-gradient(90deg,var(--brand),var(--brand2));
+  transition:width .25s;
+}
+.cache-toast-cancel{
+  align-self:flex-end;padding:4px 10px;border-radius:6px;
+  background:rgba(255,255,255,.06);border:1px solid var(--line);
+  color:#c8d2e2;font-size:11.5px;font-family:inherit;cursor:pointer;
+}
 </style>
-</head>
 <body>
 
 <input type="file" id="avatarFileInput" accept="image/*" style="display:none"
@@ -1977,6 +2042,8 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
          x5-video-player-type="h5"
          x5-video-player-fullscreen="false"></video>
 
+  <div class="danmaku-layer" id="danmakuLayer"></div>
+
   <div class="v-loading" id="vLoading"><div class="spinner"></div></div>
 
   <div class="v-center" id="vCenter" onclick="togglePlay()">
@@ -2006,10 +2073,16 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
         <button class="v-btn" type="button" onclick="playNextEpisode()" title="下一集">⏭</button>
         <span class="v-time"><span id="vTimeCur">00:00</span> / <span id="vTimeDur">00:00</span></span>
         <div class="v-spacer"></div>
+        <button class="v-txt" type="button" id="vPartyBtn" onclick="openPartyDialog()" title="观影派对">👥 同步</button>
+        <button class="v-txt" type="button" id="vDanmakuBtn" onclick="toggleDanmaku()" title="弹幕开关" style="color:var(--brand)">💬 弹幕</button>
         <button class="v-txt" type="button" id="vSpeedLabel" onclick="openVSheet('speed')">倍速</button>
         <button class="v-txt" type="button" onclick="openVSheet('ratio')">比例</button>
         <button class="v-txt" type="button" id="vQualityLabel" onclick="openVSheet('quality')" style="display:none">自动</button>
         <button class="v-txt" type="button" onclick="openVSheet('episode')">选集</button>
+      </div>
+      <div class="v-danmaku-row" id="vDanmakuRow">
+        <input class="v-danmaku-input" id="vDanmakuInput" placeholder="发条弹幕…（回车发送）" maxlength="80">
+        <button class="v-danmaku-send" type="button" onclick="sendDanmakuFromInput()">发送</button>
       </div>
     </div>
 
@@ -2058,7 +2131,47 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
     <div id="pfBody"></div>
   </div>
 </main>
+<!-- ========== 观影派对 ========== -->
+<div class="clear-mask" id="partyMask" onclick="closePartyDialog(event)"></div>
+<div class="clear-dialog" id="partyDialog" style="width:min(480px,94vw)">
+  <div class="clear-head">
+    <div>
+      <h2>👥 观影派对</h2>
+      <div class="sub">多人同步观看同一部影片</div>
+    </div>
+    <button class="clear-close" onclick="closePartyDialog()">✕</button>
+  </div>
+  <div class="clear-body" id="partyBody"></div>
+</div>
 
+<!-- ========== 离线片库 ========== -->
+<div class="clear-mask" id="offlineMask" onclick="closeOfflineDialog(event)"></div>
+<div class="clear-dialog" id="offlineDialog" style="width:min(680px,94vw)">
+  <div class="clear-head">
+    <div>
+      <h2>📥 离线片库</h2>
+      <div class="sub" id="offlineSub">已缓存内容可断网观看</div>
+    </div>
+    <button class="clear-close" onclick="closeOfflineDialog()">✕</button>
+  </div>
+  <div class="clear-body" id="offlineBody" style="padding:0"></div>
+  <div class="clear-foot">
+    <div class="clear-summary" id="offlineSummary">—</div>
+    <div class="clear-actions">
+      <button class="clear-btn ghost" onclick="closeOfflineDialog()">关闭</button>
+      <button class="clear-btn danger" onclick="clearAllOffline()">🗑 全部清除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== 缓存进度提示条（全局） ========== -->
+<div id="cacheToast" style="display:none">
+  <div class="cache-toast-inner">
+    <div class="cache-toast-txt" id="cacheToastTxt">缓存中…</div>
+    <div class="cache-toast-bar"><i id="cacheToastBar"></i></div>
+    <button onclick="cancelCurrentCache()" class="cache-toast-cancel">取消</button>
+  </div>
+</div>
 <div class="auth-mask" id="authMask" onclick="closeAuth()"></div>
 <div class="auth-dialog" id="authDialog">
   <div class="auth-head">
@@ -2358,6 +2471,13 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
       </div>
       <input type="file" id="importFile" accept=".json,application/json" hidden onchange="onImportFile(event)">
       <div class="hint" style="margin-top:12px">导入时<b>不会清空现有数据</b>，只把新数据源追加进来；网址重复的项会自动跳过，不会重复添加。</div>
+    </div>
+
+        <div class="pane-title" style="margin-top:28px">离线缓存</div>
+    <div class="set-card">
+      <div class="sw-name">离线片库</div>
+      <div class="sw-desc" style="margin-bottom:12px">缓存的剧集会保存在本机，断网也能看。通勤前一键缓存多集。</div>
+      <button class="mini-btn" style="width:100%" onclick="openOfflineDialog()">📥 打开离线片库</button>
     </div>
 
     <div class="pane-title" style="margin-top:28px">数据清理</div>
@@ -5942,7 +6062,118 @@ function historyHTML(h, i){
 function openFav(i){
   const f = getFavorites()[i]; if(!f) return;
   if(!f.playUrl && !f.magnet){ toast('该收藏没有可播放信息'); return; }
-  openMovie(entryToMovie(f), {});
+  const movie = entryToMovie(f);
+  openMovie(movie, {});
+  // 后台从数据源刷新最新剧集（magnet 类型无源可刷）
+  if(!f.magnet){
+    setTimeout(() => refreshFavoritePlaylist(movie, f), 400);
+  }
+}
+
+// ★ 从收藏进入时，后台回源刷新播放列表
+async function refreshFavoritePlaylist(movie, f){
+  if(state.current !== movie) return;
+
+  // 优先原源，其他已启用的 CMS 源作为兜底
+  const primaryApi = APIS.find(a => a.id === f.sourceId);
+  const tryList = [];
+  if(primaryApi) tryList.push(primaryApi);
+  APIS.filter(a => a.enabled && a.id !== f.sourceId && a.type !== 'animegarden')
+      .forEach(a => tryList.push(a));
+  if(!tryList.length) return;
+
+  let target = null;
+  for(const api of tryList){
+    if(state.current !== movie) return;
+    try{
+      const items = await fetchOne(api, f.name, 10000);
+      if(!items || !items.length) continue;
+      const found = items.find(it => movieKey(it) === f.key)
+                 || items.find(it => String(it.vod_name || '').trim() === String(f.name || '').trim());
+      if(found && found.vod_play_url){ target = found; break; }
+    }catch(e){
+      if(e.name === 'AbortError') return;
+    }
+  }
+
+  if(!target || state.current !== movie) return;
+
+  // 播放列表完全一致则无需刷新
+  if(target.vod_play_url === f.playUrl &&
+     (target.vod_play_from || '') === (f.playFrom || '')) return;
+
+  // === 请求完成后再读当前播放状态（防用户中途切集）===
+  const oldLineIdx = state.lineIdx;
+  const oldEpIdx   = state.epIdx;
+  const oldUrl     = state.lines[oldLineIdx]?.episodes[oldEpIdx]?.url;
+  const oldTotal   = state.lines.reduce((s,l) => s + l.episodes.length, 0);
+
+  const newLines = parseLines(target);
+  if(!newLines.length) return;
+  const newTotal = newLines.reduce((s,l) => s + l.episodes.length, 0);
+
+  // 在新列表里定位当前正在看的那一集，尽量保持播放不断
+  let li = Math.min(oldLineIdx, newLines.length - 1);
+  let ei = 0, found = false;
+  for(let a = 0; a < newLines.length && !found; a++){
+    for(let b = 0; b < newLines[a].episodes.length; b++){
+      if(oldUrl && newLines[a].episodes[b].url === oldUrl){ li = a; ei = b; found = true; break; }
+    }
+  }
+  if(!found) ei = Math.min(oldEpIdx, (newLines[li]?.episodes.length || 1) - 1);
+
+  // === 原地更新 state ===
+  state.lines   = newLines;
+  state.lineIdx = li;
+  state.epIdx   = ei;
+
+  // === 更新当前 movie 引用（不换对象，避免打断播放）===
+  movie.vod_pic        = target.vod_pic        || movie.vod_pic;
+  movie.vod_content    = target.vod_content    || movie.vod_content;
+  movie.vod_score      = target.vod_score      || movie.vod_score;
+  movie.vod_remarks    = target.vod_remarks    || movie.vod_remarks;
+  movie.vod_play_from  = target.vod_play_from;
+  movie.vod_play_url   = target.vod_play_url;
+  if(target._sourceId) movie._sourceId = target._sourceId;
+  if(target._source)   movie._source   = target._source;
+  if(target._allSources && target._allSources.length) movie._allSources = target._allSources;
+
+  // === 更新收藏存储（保留原 key 和收藏时间）===
+  const newFav = favEntryFrom(target);
+  newFav.key     = f.key;              // key 保持稳定
+  newFav.addedAt = f.addedAt || Date.now();
+  mutateBucket(b => {
+    const idx = b.favorites.findIndex(x => x.key === f.key);
+    if(idx >= 0) b.favorites[idx] = newFav;
+  });
+
+  // === 刷新详情页 UI ===
+  renderLines();
+  updateVideoTitle();
+  const poster = $('#dPoster');
+  if(movie.vod_pic) poster.src = movie.vod_pic;
+  const metaParts = [
+    movie.vod_score && parseFloat(movie.vod_score) > 0
+      ? `<b>${parseFloat(movie.vod_score).toFixed(1)}</b> 分` : '',
+    movie.vod_year || '', (movie.type_name || '').split(',')[0],
+    movie.vod_area || '', movie.vod_lang || '',
+  ].filter(Boolean);
+  const allSources = movie._allSources || (movie._source ? [movie._source] : []);
+  if(allSources.length){
+    metaParts.push(`<span style="color:var(--brand);font-size:13px">来自 ${allSources.map(esc).join('、')}</span>`);
+  }
+  $('#dMeta').innerHTML = metaParts.join(' &nbsp;·&nbsp; ');
+  $('#dDesc').textContent = String(movie.vod_content || movie.vod_blurb || movie.vod_remarks || '暂无简介')
+    .replace(/<[^>]+>/g, '').trim();
+
+  // === 提示 ===
+  if(newTotal > oldTotal){
+    toast('📺 已获取最新剧集，共 ' + newTotal + ' 集');
+  } else if(newTotal !== oldTotal){
+    toast('📺 播放列表已刷新（共 ' + newTotal + ' 集）');
+  } else {
+    toast('📺 播放列表已刷新');
+  }
 }
 function openHistory(i){
   const h = getHistory()[i]; if(!h) return;
@@ -7502,6 +7733,927 @@ document.addEventListener('keydown', e => {
     send: sendText
   };
 })();
+</script>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+ * 澪鸢增强模块：观影派对 / 弹幕 / 离线缓存
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* ============ 0. 通用工具 ============ */
+function lyGuestId(){
+  let id = '';
+  try{ id = localStorage.getItem('lingyuan_guest_id_v1') || ''; }catch(e){}
+  if(!id){
+    id = 'g_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36).slice(-4);
+    try{ localStorage.setItem('lingyuan_guest_id_v1', id); }catch(e){}
+  }
+  return id;
+}
+function lyMyId(){
+  if(typeof currentUser !== 'undefined' && currentUser && currentUser.id) return currentUser.id;
+  return lyGuestId();
+}
+function lyMyName(){
+  if(typeof currentUser !== 'undefined' && currentUser && typeof userName === 'function'){
+    const n = userName();
+    if(n) return n;
+  }
+  return '游客' + lyMyId().slice(-4);
+}
+function lyMyAvatar(){
+  try{
+    if(typeof currentUser !== 'undefined' && currentUser && typeof userAvatar === 'function') return userAvatar();
+  }catch(e){}
+  return '👤';
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * 1. 观影派对
+ * ═══════════════════════════════════════════════════════════════ */
+const PARTY = {
+  channel: null,
+  roomId: '',
+  isHost: false,
+  members: new Map(),
+  _remoteApplying: false,
+  _remoteTimer: null,
+  _bound: false
+};
+
+function partyInRoom(){ return !!PARTY.channel; }
+
+function partyBroadcast(payload){
+  if(!PARTY.channel) return;
+  payload.from = lyMyId();
+  try{ PARTY.channel.send({ type:'broadcast', event:'sync', payload }); }catch(e){}
+}
+
+function partyBroadcastDanmaku(d){
+  if(!PARTY.channel) return;
+  try{
+    PARTY.channel.send({ type:'broadcast', event:'danmaku', payload: Object.assign({ from: lyMyId() }, d) });
+  }catch(e){}
+}
+
+async function partyCreate(){
+  if(typeof supabaseReady !== 'undefined' && !supabaseReady){ toast('云端未连接，无法创建房间'); return; }
+  if(typeof sb === 'undefined' || !sb){ toast('云端未连接'); return; }
+  const code = (Math.random().toString(36).slice(2,8)).toUpperCase();
+  await partyJoinRoom(code, true);
+}
+
+async function partyJoinRoom(roomId, isHost){
+  partyLeaveRoom();
+  if(typeof sb === 'undefined' || !sb){ toast('云端未连接'); return; }
+  PARTY.roomId = String(roomId || '').toUpperCase().trim();
+  PARTY.isHost = !!isHost;
+  if(!PARTY.roomId) return;
+
+  const ch = sb.channel('party:' + PARTY.roomId, {
+    config: {
+      broadcast: { self: false },
+      presence:  { key: lyMyId() }
+    }
+  });
+
+  ch.on('broadcast', { event:'sync' }, ({ payload }) => {
+    if(!payload || payload.from === lyMyId()) return;
+    partyApplyRemote(payload);
+  });
+
+  ch.on('broadcast', { event:'danmaku' }, ({ payload }) => {
+    if(!payload || payload.from === lyMyId()) return;
+    DANMAKU.list.push({
+      time: Number(payload.time) || 0,
+      text: String(payload.text || ''),
+      color: payload.color || '#fff',
+      user: payload.user || '房友',
+      isSelf: false
+    });
+    DANMAKU.list.sort((a,b) => a.time - b.time);
+  });
+
+  ch.on('presence', { event:'sync' }, () => {
+    PARTY.members.clear();
+    const st = ch.presenceState();
+    Object.keys(st).forEach(k => {
+      (st[k] || []).forEach(p => {
+        PARTY.members.set(p.id, { name: p.name || '?', avatar: p.avatar || '👤' });
+      });
+    });
+    renderPartyBody();
+  });
+
+  PARTY.channel = ch;
+
+  ch.subscribe(async status => {
+    if(status === 'SUBSCRIBED'){
+      await ch.track({ id: lyMyId(), name: lyMyName(), avatar: lyMyAvatar() });
+      if(isHost){
+        partyBroadcast({ type:'hello', name: lyMyName(), movieName: (state.current && state.current.vod_name) || '' });
+      }else{
+        partyBroadcast({ type:'join-request' });
+      }
+      toast(isHost ? '房间已创建：' + PARTY.roomId : '已加入房间：' + PARTY.roomId);
+      bindPartyVideoEvents();
+      renderPartyBody();
+    }
+  });
+}
+
+function partyLeaveRoom(){
+  if(PARTY.channel){
+    try{ PARTY.channel.unsubscribe(); }catch(e){}
+    PARTY.channel = null;
+  }
+  PARTY.roomId = '';
+  PARTY.isHost = false;
+  PARTY.members.clear();
+  renderPartyBody();
+}
+
+function partyApplyRemote(payload){
+  if(!payload) return;
+  const v = document.getElementById('video');
+
+  PARTY._remoteApplying = true;
+  clearTimeout(PARTY._remoteTimer);
+  PARTY._remoteTimer = setTimeout(() => { PARTY._remoteApplying = false; }, 1200);
+
+  if(payload.type === 'play'){
+    if(v) v.play().catch(()=>{});
+    if(payload.t != null && v) setTimeout(() => { try{ v.currentTime = payload.t; }catch(e){} }, 200);
+  } else if(payload.type === 'pause'){
+    if(v) v.pause();
+  } else if(payload.type === 'seek'){
+    if(v && payload.t != null) try{ v.currentTime = payload.t; }catch(e){}
+  } else if(payload.type === 'episode'){
+    if(payload.lineIdx != null && payload.epIdx != null &&
+       (state.lineIdx !== payload.lineIdx || state.epIdx !== payload.epIdx)){
+      playEpisode(payload.lineIdx, payload.epIdx);
+      setTimeout(() => { if(v && payload.t) try{ v.currentTime = payload.t; }catch(e){} }, 900);
+    }
+  } else if(payload.type === 'join-request'){
+    if(PARTY.isHost && state.current){
+      partyBroadcast({
+        type: 'state',
+        movieName: state.current.vod_name,
+        lineIdx: state.lineIdx,
+        epIdx:   state.epIdx,
+        t:       v ? v.currentTime : 0,
+        paused:  v ? v.paused : true
+      });
+    }
+  } else if(payload.type === 'state'){
+    if(!state.current || state.current.vod_name !== payload.movieName){
+      toast('房主正在看《' + payload.movieName + '》，请自行搜索打开同一部影片');
+      return;
+    }
+    if(state.lineIdx !== payload.lineIdx || state.epIdx !== payload.epIdx){
+      playEpisode(payload.lineIdx, payload.epIdx);
+    }
+    setTimeout(() => {
+      if(v && payload.t) try{ v.currentTime = payload.t; }catch(e){}
+      if(v && !payload.paused) v.play().catch(()=>{});
+    }, 900);
+  } else if(payload.type === 'hello'){
+    toast('房间成员：' + (payload.name || '房主') + ' 已上线');
+  }
+}
+
+function bindPartyVideoEvents(){
+  const v = document.getElementById('video');
+  if(!v || PARTY._bound) return;
+  PARTY._bound = true;
+
+  v.addEventListener('play', () => {
+    if(!PARTY.channel || PARTY._remoteApplying) return;
+    partyBroadcast({ type:'play', t: v.currentTime });
+  });
+  v.addEventListener('pause', () => {
+    if(!PARTY.channel || PARTY._remoteApplying) return;
+    if(v.ended) return;
+    partyBroadcast({ type:'pause', t: v.currentTime });
+  });
+  v.addEventListener('seeked', () => {
+    if(!PARTY.channel || PARTY._remoteApplying) return;
+    partyBroadcast({ type:'seek', t: v.currentTime });
+  });
+}
+
+function openPartyDialog(){
+  document.getElementById('partyMask').classList.add('open');
+  document.getElementById('partyDialog').classList.add('open');
+  renderPartyBody();
+}
+
+function closePartyDialog(e){
+  if(e && e.target && !e.target.classList.contains('clear-mask')) return;
+  document.getElementById('partyMask').classList.remove('open');
+  document.getElementById('partyDialog').classList.remove('open');
+}
+
+function renderPartyBody(){
+  const box = document.getElementById('partyBody');
+  const btn = document.getElementById('vPartyBtn');
+  if(btn){
+    btn.textContent = partyInRoom() ? ('👥 ' + PARTY.roomId) : '👥 同步';
+    btn.style.color = partyInRoom() ? 'var(--brand)' : '';
+  }
+  if(!box) return;
+
+  if(!partyInRoom()){
+    box.innerHTML = `
+      <div class="party-row" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div style="font-size:13px;color:var(--muted);line-height:1.7">
+          创建一个房间，把房间号发给朋友，同一部影片的播放、暂停、切集、拖进度会实时同步。
+          无需视频流中转，只同步控制指令。
+        </div>
+        <button class="mini-btn" style="width:100%;padding:12px" onclick="partyCreate()">＋ 创建房间</button>
+      </div>
+      <div class="party-row" style="flex-direction:column;align-items:stretch;gap:8px">
+        <input id="partyJoinInput" type="text" placeholder="输入房间号，如 A3F7K9"
+          style="width:100%;padding:11px 14px;border-radius:10px;background:#0a0d13;border:1px solid var(--line);color:var(--text);font-size:14px;font-family:ui-monospace,monospace;letter-spacing:2px;text-transform:uppercase;outline:none">
+        <button class="mini-btn" style="width:100%;padding:12px" onclick="partyJoinFromInput()">→ 加入房间</button>
+      </div>
+      <div class="hint" style="margin-top:12px">
+        提示：房主与成员请先各自搜索并打开<b style="color:var(--brand)">同一部影片</b>，再开始同步播放。
+        房主切集时，成员会自动跟随（若已在看同部影片）。
+      </div>`;
+    return;
+  }
+
+  const members = [...PARTY.members.entries()];
+  box.innerHTML = `
+    <div class="party-row" style="flex-direction:column;align-items:stretch;gap:8px">
+      <div style="font-size:12.5px;color:var(--muted)">房间号（点击复制）</div>
+      <div class="party-code" onclick="partyCopyCode()" title="点击复制">${esc(PARTY.roomId)}</div>
+      <div style="font-size:11.5px;color:var(--muted);text-align:center">
+        ${PARTY.isHost ? '你是房主' : '你是成员'} · 当前 ${members.length} 人在线
+      </div>
+    </div>
+    <div class="party-row" style="flex-direction:column;align-items:stretch;gap:6px;border-top:1px solid var(--line);padding-top:12px">
+      <div style="font-size:12.5px;font-weight:600;color:#c8d2e2;margin-bottom:4px">在线成员</div>
+      ${members.map(([id, m]) => `
+        <div class="party-member">
+          <div class="dot"></div>
+          <div class="av">${typeof avatarInner === 'function' ? avatarInner(m.avatar) : '👤'}</div>
+          <div class="nm">${esc(m.name)}${id === lyMyId() ? '（你）' : ''}</div>
+        </div>`).join('') || '<div style="font-size:12px;color:var(--muted)">正在连接…</div>'}
+    </div>
+    <div class="party-row" style="border-top:1px solid var(--line);padding-top:12px">
+      <button class="mini-btn" style="width:100%;padding:12px;color:#ff9a9a;border-color:rgba(255,107,107,.3)"
+        onclick="partyLeaveRoom();renderPartyBody();">🚪 离开房间</button>
+    </div>
+    <div class="hint" style="margin-top:10px">
+      播放/暂停/切集/拖进度会自动同步给所有成员。<br>
+      若你正在看的影片与房主不同，切集同步可能失效，请先确保同一部影片。
+    </div>`;
+}
+
+function partyJoinFromInput(){
+  const inp = document.getElementById('partyJoinInput');
+  const code = (inp && inp.value || '').trim().toUpperCase();
+  if(!code || code.length < 4) return toast('请输入房间号');
+  partyJoinRoom(code, false);
+}
+
+function partyCopyCode(){
+  if(!PARTY.roomId) return;
+  navigator.clipboard.writeText(PARTY.roomId)
+    .then(() => toast('房间号已复制'))
+    .catch(() => prompt('手动复制房间号：', PARTY.roomId));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * 2. 弹幕
+ * ═══════════════════════════════════════════════════════════════ */
+const DANMAKU = {
+  enabled: true,
+  list: [],
+  loopTimer: null,
+  _laneFreeAt: [],
+  _lanes: 5,
+  _loadedFor: ''
+};
+
+function toggleDanmaku(){
+  DANMAKU.enabled = !DANMAKU.enabled;
+  const btn = document.getElementById('vDanmakuBtn');
+  const row = document.getElementById('vDanmakuRow');
+  const layer = document.getElementById('danmakuLayer');
+  if(btn) btn.style.color = DANMAKU.enabled ? 'var(--brand)' : '';
+  if(row) row.style.display = DANMAKU.enabled ? 'flex' : 'none';
+  if(layer) layer.style.display = DANMAKU.enabled ? '' : 'none';
+  if(!DANMAKU.enabled) clearDanmakuLayer();
+  try{ localStorage.setItem('lingyuan_danmaku_on_v1', DANMAKU.enabled ? '1' : '0'); }catch(e){}
+  toast(DANMAKU.enabled ? '💬 弹幕已开启' : '💬 弹幕已关闭');
+}
+
+function clearDanmakuLayer(){
+  const layer = document.getElementById('danmakuLayer');
+  if(layer) layer.innerHTML = '';
+  DANMAKU._laneFreeAt = [];
+}
+
+function currentDanmakuKey(){
+  if(!state.current) return '';
+  return movieKey(state.current) + '::' + (state.epIdx || 0);
+}
+
+async function loadDanmakuForCurrent(){
+  const key = currentDanmakuKey();
+  if(!key || DANMAKU._loadedFor === key) return;
+  DANMAKU._loadedFor = key;
+  DANMAKU.list = [];
+  clearDanmakuLayer();
+
+  try{
+    const cached = JSON.parse(localStorage.getItem('lingyuan_danmaku_v1::' + key) || '[]');
+    if(Array.isArray(cached)) DANMAKU.list = cached.map(d => ({ ...d, isSelf: false }));
+  }catch(e){}
+
+  if(typeof supabaseReady !== 'undefined' && supabaseReady && typeof sb !== 'undefined' && sb && state.current){
+    try{
+      const { data } = await sb.from('danmaku')
+        .select('time_sec,text,color,user_id,user_name')
+        .eq('movie_key', movieKey(state.current))
+        .eq('episode_index', state.epIdx || 0)
+        .order('time_sec', { ascending: true })
+        .limit(3000);
+      if(Array.isArray(data)){
+        const merged = new Map();
+        DANMAKU.list.forEach(d => merged.set(d.time + '|' + d.text, d));
+        data.forEach(r => {
+          const k = Number(r.time_sec) + '|' + r.text;
+          if(!merged.has(k)){
+            merged.set(k, {
+              time: Number(r.time_sec),
+              text: r.text,
+              color: r.color || '#fff',
+              user: r.user_name || '匿名',
+              isSelf: false
+            });
+          }
+        });
+        DANMAKU.list = [...merged.values()].sort((a,b) => a.time - b.time);
+      }
+    }catch(e){ /* 表可能未创建，静默 */ }
+  }
+  startDanmakuLoop();
+}
+
+function startDanmakuLoop(){
+  stopDanmakuLoop();
+  let lastT = -1;
+  DANMAKU.loopTimer = setInterval(() => {
+    if(!DANMAKU.enabled) return;
+    const v = document.getElementById('video');
+    if(!v) return;
+    const t = v.currentTime || 0;
+
+    if(lastT >= 0 && (t < lastT - 1.5 || t > lastT + 3)){
+      clearDanmakuLayer();
+    }
+    lastT = t;
+
+    if(v.paused) return;
+
+    DANMAKU.list.forEach(d => {
+      if(d._shown) return;
+      if(d.time > lastT + 0.15) return;
+      if(d.time < lastT - 0.6) { d._shown = true; return; }
+      d._shown = true;
+      renderDanmakuItem(d);
+    });
+  }, 250);
+}
+
+function stopDanmakuLoop(){
+  if(DANMAKU.loopTimer){ clearInterval(DANMAKU.loopTimer); DANMAKU.loopTimer = null; }
+}
+
+function renderDanmakuItem(d){
+  if(!DANMAKU.enabled) return;
+  const layer = document.getElementById('danmakuLayer');
+  if(!layer || !d || !d.text) return;
+
+  const v = document.getElementById('video');
+  const vw = (v && v.clientWidth) || layer.clientWidth || 640;
+
+  const el = document.createElement('div');
+  el.className = 'dm-item' + (d.isSelf ? ' self' : '');
+  el.textContent = d.text;
+  el.style.color = d.color || '#fff';
+
+  const now = performance.now();
+  let lane = 0;
+  for(let i = 0; i < DANMAKU._lanes; i++){
+    if((DANMAKU._laneFreeAt[i] || 0) <= now){ lane = i; break; }
+    lane = i;
+  }
+  const topPct = 6 + lane * (80 / DANMAKU._lanes);
+  el.style.top = topPct + '%';
+
+  const approxWidth = Math.min(600, Math.max(80, d.text.length * 18));
+  const dur = Math.max(6, Math.min(14, (vw + approxWidth) / 100));
+  el.style.animationDuration = dur + 's';
+  layer.appendChild(el);
+
+  DANMAKU._laneFreeAt[lane] = now + dur * 1000 * 0.85;
+
+  setTimeout(() => {
+    if(el.parentNode) el.parentNode.removeChild(el);
+  }, dur * 1000 + 200);
+}
+
+function sendDanmakuFromInput(){
+  const inp = document.getElementById('vDanmakuInput');
+  if(!inp) return;
+  sendDanmaku(inp.value);
+  inp.value = '';
+}
+
+async function sendDanmaku(text){
+  text = String(text || '').trim();
+  if(!text) return;
+  if(text.length > 80) text = text.slice(0, 80);
+  if(!state.current) return toast('请先打开一部影片');
+  const v = document.getElementById('video');
+  const t = v ? v.currentTime : 0;
+
+  const d = {
+    time: t,
+    text,
+    color: '#ffffff',
+    user: lyMyName(),
+    isSelf: true
+  };
+
+  DANMAKU.list.push(d);
+  DANMAKU.list.sort((a,b) => a.time - b.time);
+  d._shown = true;
+  renderDanmakuItem(d);
+
+  partyBroadcastDanmaku(d);
+
+  if(typeof supabaseReady !== 'undefined' && supabaseReady && typeof sb !== 'undefined' && sb && state.current){
+    try{
+      sb.from('danmaku').insert({
+        movie_key: movieKey(state.current),
+        episode_index: state.epIdx || 0,
+        time_sec: t,
+        text: d.text,
+        color: d.color,
+        user_id: lyMyId(),
+        user_name: d.user
+      }).then(() => {}).catch(() => {});
+    }catch(e){}
+  }
+
+  try{
+    const key = currentDanmakuKey();
+    const cache = JSON.parse(localStorage.getItem('lingyuan_danmaku_v1::' + key) || '[]');
+    cache.push({ time: t, text: d.text, color: d.color, user: d.user });
+    if(cache.length > 500) cache.splice(0, cache.length - 500);
+    localStorage.setItem('lingyuan_danmaku_v1::' + key, JSON.stringify(cache));
+  }catch(e){}
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * 3. 离线缓存
+ * ═══════════════════════════════════════════════════════════════ */
+const OFFLINE = {
+  dbName: 'lingyuan_offline_v1',
+  store:  'episodes',
+  db:     null,
+  _cancel: false,
+  _blobUrls: []
+};
+
+function offlineOpenDb(){
+  return new Promise((resolve, reject) => {
+    if(!window.indexedDB) return reject(new Error('当前环境不支持 IndexedDB'));
+    if(OFFLINE.db) return resolve(OFFLINE.db);
+    const req = indexedDB.open(OFFLINE.dbName, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if(!db.objectStoreNames.contains(OFFLINE.store)){
+        db.createObjectStore(OFFLINE.store, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => { OFFLINE.db = req.result; resolve(OFFLINE.db); };
+    req.onerror   = () => reject(req.error || new Error('打开缓存库失败'));
+  });
+}
+
+function offlineTx(mode){
+  return offlineOpenDb().then(db => db.transaction(OFFLINE.store, mode));
+}
+
+async function offlinePut(record){
+  const tx = await offlineTx('readwrite');
+  return new Promise((resolve, reject) => {
+    const rq = tx.objectStore(OFFLINE.store).put(record);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = tx.onabort = () => reject(tx.error || new Error('写入失败'));
+  });
+}
+
+async function offlineGet(id){
+  const tx = await offlineTx('readonly');
+  return new Promise((resolve, reject) => {
+    const rq = tx.objectStore(OFFLINE.store).get(id);
+    rq.onsuccess = () => resolve(rq.result || null);
+    rq.onerror   = () => reject(rq.error || new Error('读取失败'));
+  });
+}
+
+async function offlineAll(){
+  const tx = await offlineTx('readonly');
+  return new Promise((resolve, reject) => {
+    const rq = tx.objectStore(OFFLINE.store).getAll();
+    rq.onsuccess = () => resolve(rq.result || []);
+    rq.onerror   = () => reject(rq.error || new Error('读取失败'));
+  });
+}
+
+async function offlineDel(id){
+  const tx = await offlineTx('readwrite');
+  return new Promise(resolve => {
+    tx.objectStore(OFFLINE.store).delete(id);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = tx.onabort = () => resolve(false);
+  });
+}
+
+async function offlineClearAll(){
+  const tx = await offlineTx('readwrite');
+  return new Promise(resolve => {
+    tx.objectStore(OFFLINE.store).clear();
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = tx.onabort = () => resolve(false);
+  });
+}
+
+function parseM3U8(text, baseUrl){
+  const lines = String(text || '').split(/\r?\n/);
+  const segs = [];
+  let hasVariant = false;
+  let hasKey = false;
+  for(const raw of lines){
+    const t = raw.trim();
+    if(!t) continue;
+    if(t.startsWith('#EXT-X-STREAM-INF')){ hasVariant = true; continue; }
+    if(t.startsWith('#EXT-X-KEY')){
+      if(!/#EXT-X-KEY:METHOD=NONE/i.test(t)) hasKey = true;
+      continue;
+    }
+    if(t.startsWith('#')) continue;
+    let abs;
+    try{ abs = new URL(t, baseUrl).href; }catch(e){ abs = t; }
+    segs.push(abs);
+  }
+  return { segs, hasVariant, hasKey };
+}
+
+function buildM3U8WithBlobs(originalText, blobUrls){
+  let i = 0;
+  return String(originalText || '').split(/\r?\n/).map(line => {
+    const t = line.trim();
+    if(t && !t.startsWith('#')){
+      return blobUrls[i++] || t;
+    }
+    return line;
+  }).join('\n');
+}
+
+function setCacheToast(show, text, pct){
+  const el = document.getElementById('cacheToast');
+  if(!el) return;
+  if(!show){ el.style.display = 'none'; return; }
+  el.style.display = 'block';
+  const txt = document.getElementById('cacheToastTxt');
+  const bar = document.getElementById('cacheToastBar');
+  if(txt) txt.textContent = text || '缓存中…';
+  if(bar) bar.style.width = Math.max(0, Math.min(100, pct || 0)) + '%';
+}
+
+function cancelCurrentCache(){
+  OFFLINE._cancel = true;
+  setCacheToast(true, '正在取消…', 0);
+}
+
+async function cacheCurrentEpisode(){
+  if(!state.current) return toast('请先打开一部影片');
+  const line = state.lines[state.lineIdx];
+  const ep = line && line.episodes[state.epIdx];
+  if(!ep || !ep.url) return toast('当前集没有可缓存的地址');
+  const url = ep.url;
+  if(!/\.m3u8(\?|#|$)/i.test(url)){
+    if(url.startsWith('magnet:')) return toast('磁力链接不支持缓存，请用下载工具');
+    return toast('该集不是 m3u8 资源，暂不支持离线缓存');
+  }
+
+  const id = movieKey(state.current) + '::' + (state.epIdx || 0);
+  const existing = await offlineGet(id).catch(() => null);
+  if(existing){
+    if(!confirm('本集已经缓存过了，重新缓存会覆盖旧数据，继续？')) return;
+  }
+
+  OFFLINE._cancel = false;
+  setCacheToast(true, '正在解析 m3u8…', 2);
+
+  try{
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('m3u8 HTTP ' + res.status);
+    const text = await res.text();
+    const parsed = parseM3U8(text, url);
+
+    if(parsed.hasVariant){
+      setCacheToast(false);
+      return toast('❌ 该资源是多码率清单，暂不支持离线缓存，请换其他线路');
+    }
+    if(parsed.hasKey){
+      setCacheToast(false);
+      return toast('❌ 该资源使用加密分片（AES），暂不支持离线缓存');
+    }
+    if(!parsed.segs.length){
+      setCacheToast(false);
+      return toast('❌ 未解析到分片，无法缓存');
+    }
+
+    const blobs = [];
+    let totalBytes = 0;
+    for(let i = 0; i < parsed.segs.length; i++){
+      if(OFFLINE._cancel) throw new Error('__CANCEL__');
+      const segUrl = parsed.segs[i];
+      const r = await fetch(segUrl);
+      if(!r.ok) throw new Error('分片 ' + (i+1) + ' 下载失败 (HTTP ' + r.status + ')');
+      const b = await r.blob();
+      blobs.push(b);
+      totalBytes += b.size;
+      const pct = 5 + Math.round((i + 1) / parsed.segs.length * 90);
+      setCacheToast(true,
+        '缓存中 ' + (i+1) + '/' + parsed.segs.length + ' · ' + fmtBytes(totalBytes),
+        pct);
+    }
+
+    const record = {
+      id,
+      movieKey: movieKey(state.current),
+      movieName: state.current.vod_name || '未知影片',
+      pic: state.current.vod_pic || '',
+      epIdx: state.epIdx || 0,
+      epName: ep.name || ('第' + (state.epIdx + 1) + '集'),
+      m3u8: text,
+      segCount: parsed.segs.length,
+      totalBytes,
+      createdAt: Date.now()
+    };
+
+    const segPromises = blobs.map((b, i) => offlinePut({
+      id: id + '::seg::' + i,
+      blob: b
+    }));
+    await Promise.all(segPromises);
+    await offlinePut(record);
+
+    setCacheToast(true, '✅ 缓存完成 · ' + fmtBytes(totalBytes), 100);
+    setTimeout(() => setCacheToast(false), 2000);
+    toast('✅ 已缓存：' + record.movieName + ' · ' + record.epName);
+  }catch(e){
+    setCacheToast(false);
+    if(e.message === '__CANCEL__') toast('已取消缓存');
+    else{
+      console.warn('[离线缓存]', e);
+      toast('❌ 缓存失败：' + (e.message || '未知错误'));
+    }
+  }
+}
+
+function fmtBytes(n){
+  n = Number(n) || 0;
+  if(n < 1024) return n + ' B';
+  if(n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  if(n < 1024 * 1024 * 1024) return (n / 1024 / 1024).toFixed(1) + ' MB';
+  return (n / 1024 / 1024 / 1024).toFixed(2) + ' GB';
+}
+
+async function playCachedEpisodeById(id){
+  const record = await offlineGet(id);
+  if(!record) return toast('缓存不存在');
+  const blobs = [];
+  for(let i = 0; i < record.segCount; i++){
+    const seg = await offlineGet(id + '::seg::' + i);
+    if(!seg || !seg.blob) return toast('缓存分片缺失，请重新缓存');
+    blobs.push(seg.blob);
+  }
+  const blobUrls = blobs.map(b => URL.createObjectURL(b));
+  OFFLINE._blobUrls.forEach(u => { try{ URL.revokeObjectURL(u); }catch(e){} });
+  OFFLINE._blobUrls = blobUrls;
+
+  const newM3u8 = buildM3U8WithBlobs(record.m3u8, blobUrls);
+  const m3u8Blob = new Blob([newM3u8], { type: 'application/vnd.apple.mpegurl' });
+  const m3u8Url = URL.createObjectURL(m3u8Blob);
+  OFFLINE._blobUrls.push(m3u8Url);
+
+  const video = document.getElementById('video');
+  if(typeof hlsInstance !== 'undefined' && hlsInstance){ try{ hlsInstance.destroy(); }catch(e){} hlsInstance = null; }
+  video.removeAttribute('src'); video.load();
+  state.currentUrl = '';
+  showVideoLoading();
+
+  if(window.Hls && Hls.isSupported()){
+    hlsInstance = new Hls({ maxBufferLength: 60 });
+    hlsInstance.loadSource(m3u8Url);
+    hlsInstance.attachMedia(video);
+    hlsInstance.on(Hls.Events.ERROR, (e, data) => {
+      if(data.fatal){ hideVideoLoading(); toast('离线播放失败，请重新缓存'); }
+    });
+  }else if(video.canPlayType('application/vnd.apple.mpegurl')){
+    video.src = m3u8Url;
+  }else{
+    return toast('当前浏览器不支持 HLS 播放');
+  }
+  video.play().catch(()=>{});
+  toast('▶ 正在播放离线缓存');
+}
+
+async function openOfflineDialog(){
+  document.getElementById('offlineMask').classList.add('open');
+  document.getElementById('offlineDialog').classList.add('open');
+  await renderOfflineList();
+}
+
+function closeOfflineDialog(e){
+  if(e && e.target && !e.target.classList.contains('clear-mask')) return;
+  document.getElementById('offlineMask').classList.remove('open');
+  document.getElementById('offlineDialog').classList.remove('open');
+}
+
+async function renderOfflineList(){
+  const box = document.getElementById('offlineBody');
+  const sum = document.getElementById('offlineSummary');
+  if(!box) return;
+  let all = [];
+  try{ all = await offlineAll(); }catch(e){ all = []; }
+
+  const records = all.filter(r => r && r.movieKey && r.segCount != null);
+  records.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+  if(!records.length){
+    box.innerHTML = `<div class="off-empty">
+      🎬 还没有离线内容<br>
+      <span style="font-size:12px;opacity:.8">播放影片时点击剧集旁的 ⬇ 图标即可缓存本集</span>
+    </div>`;
+    if(sum) sum.innerHTML = '共 0 集 · 0 B';
+    return;
+  }
+
+  const groups = new Map();
+  records.forEach(r => {
+    if(!groups.has(r.movieKey)) groups.set(r.movieKey, { name: r.movieName, pic: r.pic, items: [] });
+    groups.get(r.movieKey).items.push(r);
+  });
+
+  let totalBytes = 0;
+  let html = '<div class="off-list">';
+  groups.forEach((g, mkey) => {
+    html += `<div style="font-size:13px;font-weight:700;color:#c8d2e2;margin:8px 0 6px;padding-left:2px">
+      ${esc(g.name)} <span style="color:var(--muted);font-weight:500;font-size:11.5px">· ${g.items.length} 集</span>
+    </div>`;
+    g.items.forEach(r => {
+      totalBytes += r.totalBytes || 0;
+      html += `<div class="off-item">
+        <div class="off-poster">${r.pic ? `<img loading="lazy" src="${esc(r.pic)}" alt="" onerror="this.remove()">` : ''}</div>
+        <div class="off-info">
+          <div class="off-name">${esc(r.epName || ('第' + (r.epIdx + 1) + '集'))}</div>
+          <div class="off-meta">${fmtBytes(r.totalBytes)} · ${r.segCount} 个分片 · ${fmtWhen(r.createdAt)}</div>
+        </div>
+        <div class="off-acts">
+          <button onclick="playCachedEpisodeById('${esc(r.id)}')">▶ 播放</button>
+          <button class="danger" onclick="deleteOfflineItem('${esc(r.id)}', ${r.segCount})">✕</button>
+        </div>
+      </div>`;
+    });
+  });
+  html += '</div>';
+  box.innerHTML = html;
+  if(sum) sum.innerHTML = `共 <b>${records.length}</b> 集 · 约 <b>${fmtBytes(totalBytes)}</b> · 保存在本机`;
+}
+
+async function deleteOfflineItem(id, segCount){
+  if(!confirm('确定删除这个缓存？')) return;
+  await offlineDel(id);
+  for(let i = 0; i < (segCount || 0); i++){
+    await offlineDel(id + '::seg::' + i);
+  }
+  toast('已删除');
+  renderOfflineList();
+}
+
+async function clearAllOffline(){
+  if(!confirm('确定要清除全部离线缓存吗？此操作不可恢复。')) return;
+  await offlineClearAll();
+  toast('已清除全部离线缓存');
+  renderOfflineList();
+}
+
+function releaseOfflineBlobs(){
+  OFFLINE._blobUrls.forEach(u => { try{ URL.revokeObjectURL(u); }catch(e){} });
+  OFFLINE._blobUrls = [];
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * 4. 集成钩子
+ * ═══════════════════════════════════════════════════════════════ */
+
+/* 4.1 切集：刷新弹幕 + 广播 */
+(function hookPlayEpisode(){
+  if(typeof window.playEpisode !== 'function') return;
+  const orig = window.playEpisode;
+  window.playEpisode = function(lineIdx, epIdx){
+    orig.apply(this, arguments);
+    if(PARTY.channel && !PARTY._remoteApplying){
+      const v = document.getElementById('video');
+      partyBroadcast({
+        type: 'episode',
+        lineIdx, epIdx,
+        t: v ? v.currentTime : 0
+      });
+    }
+    DANMAKU._loadedFor = '';
+    DANMAKU.list = [];
+    clearDanmakuLayer();
+    setTimeout(loadDanmakuForCurrent, 300);
+  };
+})();
+
+/* 4.2 打开详情：预加载弹幕 */
+(function hookOpenMovie(){
+  if(typeof window.openMovie !== 'function') return;
+  const orig = window.openMovie;
+  window.openMovie = function(m, opts){
+    orig.apply(this, arguments);
+    DANMAKU._loadedFor = '';
+    setTimeout(loadDanmakuForCurrent, 600);
+  };
+})();
+
+/* 4.3 停止播放：释放 blob URL */
+(function hookStopVideo(){
+  if(typeof window.stopVideo !== 'function') return;
+  const orig = window.stopVideo;
+  window.stopVideo = function(){
+    orig.apply(this, arguments);
+    releaseOfflineBlobs();
+    stopDanmakuLoop();
+  };
+})();
+
+/* 4.4 m3u8 触发缓存，其他走原逻辑 */
+(function hookDownloadEpisode(){
+  if(typeof window.downloadEpisode !== 'function') return;
+  const orig = window.downloadEpisode;
+  window.downloadEpisode = function(url, event){
+    if(event) event.stopPropagation();
+    if(url && /\.m3u8(\?|#|$)/i.test(url)){
+      cacheCurrentEpisode();
+      return;
+    }
+    return orig.apply(this, arguments);
+  };
+})();
+
+/* 4.5 弹幕输入框回车 */
+document.addEventListener('keydown', e => {
+  if(e.target && e.target.id === 'vDanmakuInput' && e.key === 'Enter'){
+    e.preventDefault();
+    sendDanmakuFromInput();
+  }
+});
+
+/* 4.6 页面卸载释放 blob */
+window.addEventListener('pagehide', releaseOfflineBlobs);
+
+/* 4.7 恢复弹幕开关状态 */
+(function initDanmakuState(){
+  try{
+    const v = localStorage.getItem('lingyuan_danmaku_on_v1');
+    if(v === '0'){
+      DANMAKU.enabled = false;
+      const row = document.getElementById('vDanmakuRow');
+      const layer = document.getElementById('danmakuLayer');
+      const btn = document.getElementById('vDanmakuBtn');
+      if(row) row.style.display = 'none';
+      if(layer) layer.style.display = 'none';
+      if(btn) btn.style.color = '';
+    }
+  }catch(e){}
+})();
+
+console.log('[澪鸢] 观影派对 / 弹幕 / 离线缓存 模块已加载');
 </script>
 </body>
 </html>
