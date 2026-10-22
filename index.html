@@ -2123,10 +2123,11 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
       <div class="pf-stat"><b id="pfHisCount">0</b><span>观看记录</span></div>
       <div class="pf-stat"><b id="pfSearchCount">0</b><span>搜索记录</span></div>
     </div>
-    <div class="pf-tabs">
+       <div class="pf-tabs">
       <button class="pf-tab active" data-tab="fav" onclick="switchProfileTab('fav')">❤️ 我的收藏</button>
       <button class="pf-tab" data-tab="his" onclick="switchProfileTab('his')">🕒 观看历史</button>
       <button class="pf-tab" data-tab="srch" onclick="switchProfileTab('srch')">🔍 搜索记录</button>
+      <button class="pf-tab" data-tab="offline" onclick="switchProfileTab('offline')">📥 离线缓存</button>
     </div>
     <div id="pfBody"></div>
   </div>
@@ -2477,7 +2478,7 @@ html.dark .ai-saved-item { background: rgba(255, 255, 255, .05); }
     <div class="set-card">
       <div class="sw-name">离线片库</div>
       <div class="sw-desc" style="margin-bottom:12px">缓存的剧集会保存在本机，断网也能看。通勤前一键缓存多集。</div>
-      <button class="mini-btn" style="width:100%" onclick="openOfflineDialog()">📥 打开离线片库</button>
+           <button class="mini-btn" style="width:100%" onclick="openOfflineInProfile()">📥 打开离线片库（个人主页）</button>
     </div>
 
     <div class="pane-title" style="margin-top:28px">数据清理</div>
@@ -3072,33 +3073,38 @@ const PROXIES = [
   { name:'worker',        build:u => 'https://my-proxy.2169215579.workers.dev/?url=' + encodeURIComponent(u) }
 ];
 
-async function rawFetch(url, perTimeout = 5000, totalTimeout = 10000, signal){
+async function rawFetch(url, perTimeout = 3000, totalTimeout = 15000, signal, validator){
   const deadline = Date.now() + totalTimeout;
   let lastErr = null;
   for(const proxy of PROXIES){
-    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError'); // 👈 新增
-    
+    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
     const remain = deadline - Date.now();
     if(remain <= 250) break;
     const ctrl  = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), Math.min(perTimeout, remain));
-    
-    // 👇 新增：如果外部取消了，同时取消当前的代理请求
-    if (signal) {
-      signal.addEventListener('abort', () => {
-        ctrl.abort();
-        clearTimeout(timer);
-      });
-    }
+
+    // ✅ 用一个具名 handler，避免每次循环挂新监听器却不清除
+    const onAbort = () => { try{ ctrl.abort(); }catch(e){} clearTimeout(timer); };
+    if (signal) signal.addEventListener('abort', onAbort);
 
     try{
       const res = await fetch(proxy.build(url), { signal: ctrl.signal });
       clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
       if(!res.ok) throw new Error('HTTP ' + res.status);
-      return await res.text();
+
+      const text = await res.text();
+      // ✅ 关键：内容不符合预期 → 不返回，继续尝试下一个代理
+      if(validator && !validator(text)){
+        lastErr = new Error('响应不是有效 JSON（可能被反爬/劫持，' + proxy.name + '）');
+        continue;
+      }
+      return text;
     }catch(e){
       clearTimeout(timer);
-      if (e.name === 'AbortError') throw e; // 👈 新增：遇到取消直接抛出
+      if (signal) signal.removeEventListener('abort', onAbort);
+      if (e.name === 'AbortError') throw e;
       lastErr = e;
     }
   }
@@ -3761,7 +3767,7 @@ function toggleCurrentFavorite(){
 function updateFavBtn(){
   const btn = document.getElementById('favBtn');
   if(!btn) return;
-  if(!state.current){ btn.style.display = 'none'; return; }
+  if(!state.current || state.current._offline){ btn.style.display = 'none'; return; }
   btn.style.display = 'inline-flex';
   const on = isFavorite(movieKey(state.current));
   btn.innerHTML = on ? '★ 已收藏' : '☆ 收藏';
@@ -5359,52 +5365,91 @@ window.addEventListener('popstate', function(e){
   }
 });
 
-async function fetchOne(api, kw, timeout = 10000, signal){
+async function fetchOne(api, kw, timeout = 15000, signal){
   if(api.type === 'animegarden') return fetchAnimeGarden(api, kw, timeout, signal);
-  const url = `${api.url}?ac=detail&wd=${encodeURIComponent(kw)}`;
-  try{
-    const text = await rawFetch(url, 5000, timeout, signal);
-    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const data = parseApiResponse(text);
-    const list = (data && data.list) || [];
-    return list.filter(it => it && it.vod_name).map(it => ({ ...it, _source: api.name, _sourceId: api.id }));
-  }catch(e){ 
-    if (e.name === 'AbortError') throw e;
-    console.warn('[搜索失败]', api.name, e.message); 
-    return []; 
-  }
-}
 
-async function fetchAnimeGarden(api, kw, timeout = 10000, signal){
+  const targetUrl = `${api.url}?ac=detail&wd=${encodeURIComponent(kw)}`;
+  const urlsToTry = [
+    targetUrl,
+    `https://my-proxy.2169215579.workers.dev/?url=${encodeURIComponent(targetUrl)}`
+  ];
+
+  for (let url of urlsToTry) {
+    // ✅ 移除外部 signal 监听，让它自己超时自己消化，绝不抛出异常干扰全局
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+
+    try {
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+
+      const text = await res.text();
+      const cleanText = text.trim().replace(/^\uFEFF/, '');
+      
+      if (!cleanText.startsWith('{') && !cleanText.startsWith('[')) continue;
+
+      const data = JSON.parse(cleanText);
+      if (data && data.list && Array.isArray(data.list)) {
+        return data.list.filter(it => it && it.vod_name).map(item => ({ ...item, _source: api.name, _sourceId: api.id }));
+      }
+    } catch (e) {
+      clearTimeout(timer);
+      // ✅ 什么错都直接吞掉，绝不 throw，不影响其它源
+    }
+  }
+  return [];
+}
+async function fetchAnimeGarden(api, kw, timeout = 15000, signal){
   const baseUrl = api.url || 'https://api.animes.garden/resources';
   const url = new URL(baseUrl);
   url.searchParams.set('search', kw); 
   url.searchParams.set('page', '1'); 
   url.searchParams.set('pageSize', '50');
-  try{
-    const text = await rawFetch(url.toString(), 5000, timeout, signal);
-    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-    const data = parseApiResponse(text);
-    if(data.status !== 'OK' || !Array.isArray(data.resources)) return [];
-    return data.resources.map(item => {
-      const title = item.title || '未知资源';
-      const magnet = item.magnet || '';
-      const size = item.size ? formatSize(item.size) : '';
-      const fansub = item.fansub ? (item.fansub.name || item.fansub) : '';
-      const publisher = item.publisher ? (item.publisher.name || item.publisher) : '';
-      const type = item.type || '';
-      const createdAt = item.createdAt ? new Date(item.createdAt).getFullYear() : '';
-      return { vod_name: title, vod_pic:'', vod_play_url: magnet, vod_play_from:'Magnet',
-        vod_year: String(createdAt), type_name: type,
-        vod_remarks: [fansub, size].filter(Boolean).join(' · '),
-        _source: api.name, _sourceId: api.id, _magnet: magnet, _size: size,
-        _fansub: fansub, _publisher: publisher, _href: item.href || '' };
-    });
-  }catch(e){ 
-    if (e.name === 'AbortError') throw e;
-    console.warn('[AnimeGarden 失败]', e.message); 
-    return []; 
+
+  const targetUrl = url.toString();
+  const urlsToTry = [
+    targetUrl,
+    `https://my-proxy.2169215579.workers.dev/?url=${encodeURIComponent(targetUrl)}`
+  ];
+
+  for (const tryUrl of urlsToTry) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+
+    try {
+      const res = await fetch(tryUrl, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+
+      const text = await res.text();
+      const cleanText = text.trim().replace(/^\uFEFF/, '');
+      if (!cleanText.startsWith('{') && !cleanText.startsWith('[')) continue;
+
+      const data = JSON.parse(cleanText);
+      if (data.status === 'OK' && Array.isArray(data.resources)) {
+        return data.resources.map(item => {
+          const title = item.title || '未知资源';
+          const magnet = item.magnet || '';
+          const size = item.size ? formatSize(item.size) : '';
+          const fansub = item.fansub ? (item.fansub.name || item.fansub) : '';
+          const publisher = item.publisher ? (item.publisher.name || item.publisher) : '';
+          const type = item.type || '';
+          const createdAt = item.createdAt ? new Date(item.createdAt).getFullYear() : '';
+          return { 
+            vod_name: title, vod_pic:'', vod_play_url: magnet, vod_play_from:'Magnet',
+            vod_year: String(createdAt), type_name: type,
+            vod_remarks: [fansub, size].filter(Boolean).join(' · '),
+            _source: api.name, _sourceId: api.id, _magnet: magnet, _size: size,
+            _fansub: fansub, _publisher: publisher, _href: item.href || '' 
+          };
+        });
+      }
+    } catch (e) {
+      clearTimeout(timer);
+    }
   }
+  return [];
 }
 function formatSize(bytes){
   if(!bytes) return '';
@@ -5470,51 +5515,83 @@ async function doSearch(kw){
   $('#resultMeta').innerHTML = `<span>正在搜索 <b>${esc(kw)}</b> …</span>`;
   $('#resultBody').innerHTML = `<div class="loading"><div class="spinner"></div><span>正在从 ${total} 个资源站聚合搜索…</span></div>`;
 
-  function mergeItems(items){
+    function mergeItems(items){
     if(searchSignal.aborted) return;
     (items || []).forEach(item => {
       if(!item || !item.vod_name) return;
+
+      // === 修改点 1：季数精准过滤（排除第二季、第三季等） ===
+      // 如果用户的搜索词里包含了“第X季”，则只保留匹配该季数的结果
+      const kwSeasonMatch = kw.match(/第([一二三四五六七八九十0-9]+)季/);
+      if (kwSeasonMatch) {
+        const targetSeason = kwSeasonMatch[0]; // 比如 "第一季"
+        const itemSeasonMatch = item.vod_name.match(/第([一二三四五六七八九十0-9]+)季/);
+        // 如果该资源名字里带有季数，且不等于目标季数，直接丢弃（比如搜索第一季，过滤掉第二季）
+        if (itemSeasonMatch && itemSeasonMatch[0] !== targetSeason) {
+          return; 
+        }
+      }
+
       sourceHits.add(item._source);
-      const key = (item.vod_name + '|' + (item.vod_year || '')).toLowerCase();
+      // 用 名称+年份 作为唯一标识合并
+      const key = (item.vod_name.trim().replace(/\s+/g, ' ') + '|' + (item.vod_year || '')).toLowerCase();
       const old = map.get(key);
-      if(!old){ item._allSources = [item._source]; map.set(key, item); }
-      else{
+      
+      if(!old){ 
+        item._allSources = [item._source]; 
+        map.set(key, item); 
+      } else {
         if(!old._allSources.includes(item._source)) old._allSources.push(item._source);
+        
+        // 补全缺失的封面、简介等基础信息
         if(!old.vod_pic     && item.vod_pic)     old.vod_pic     = item.vod_pic;
         if(!old.vod_content && item.vod_content) old.vod_content = item.vod_content;
         if(!old.vod_score   && item.vod_score)   old.vod_score   = item.vod_score;
         if(!old.vod_remarks && item.vod_remarks) old.vod_remarks = item.vod_remarks;
-        if((!old.vod_play_url || String(old.vod_play_url).length < 10) && item.vod_play_url){
-          old.vod_play_url  = item.vod_play_url;
-          old.vod_play_from = item.vod_play_from;
+
+        // === 修改点 2：合并所有源的播放线路（解决只能播放一个源的问题） ===
+        // 只要新源有播放地址，就把它拼接到主对象的播放列表里
+        if (item.vod_play_url && item.vod_play_url.trim() !== '') {
+          // 获取数据源名称（优先用接口返回的，没有就用源站名称）
+          const itemFrom = item.vod_play_from || item._source || '未知线路';
+          
+          if (!old.vod_play_url) {
+            // 如果主对象还没有播放地址，直接赋值
+            old.vod_play_url = item.vod_play_url;
+            old.vod_play_from = itemFrom;
+          } else {
+            // 如果主对象已经有了播放地址，把新源的地址用 "$$$" 拼接在后面
+            // 去重判断：如果完全一样的播放地址就不重复加
+            if (!old.vod_play_url.includes(item.vod_play_url)) {
+              old.vod_play_from += '$$$' + itemFrom;
+              old.vod_play_url += '$$$' + item.vod_play_url;
+            }
+          }
         }
       }
     });
   }
 
-  const CONCURRENCY = 8;
-  let cursor = 0;
-  
-  async function worker(){
-    while(cursor < enabled.length){
-      if(searchSignal.aborted) break;
-      const api = enabled[cursor++];
-      try{
-        const items = await fetchOne(api, kw, 10000, searchSignal);
-        if(searchSignal.aborted) break;
+   // ✅ 使用全量并发，并丢弃任何源内部的错误，保证有多少源就搜多少源
+  const tasks = enabled.map(api => {
+    return (async () => {
+      if (searchSignal.aborted) return;
+      try {
+        // 关键：不再传递 searchSignal，防止某个源超时导致线程被全部杀死
+        const items = await fetchOne(api, kw, 15000);
+        if (searchSignal.aborted) return;
         mergeItems(items);
-      }catch(e){
-        if(e.name === 'AbortError') break;
+      } catch (e) {
+        // 静默吞掉一切报错
       }
       done++;
       schedulePaint();
-    }
-  }
-  
-  try {
-    const poolSize = Math.min(CONCURRENCY, enabled.length);
-    await Promise.all(Array.from({ length: poolSize }, worker));
-  } catch(e) {}
+    })();
+  });
+
+  // 等待所有源全部跑完
+  await Promise.allSettled(tasks);
+
 
   if(searchSignal.aborted) return;
 
@@ -5983,6 +6060,11 @@ function renderProfileBody(){
         <button class="mini-btn" style="flex:0 0 auto;width:auto;min-width:0;padding:8px 16px" onclick="clearHistory()">🗑 清空历史</button>
       </div>
       <div class="his-list">${groupedHistoryHTML(b.history)}</div>`;
+    return;
+  }
+  if(pfTab === 'offline'){
+    box.innerHTML = `<div class="loading"><div class="spinner"></div><span>正在读取离线缓存…</span></div>`;
+    renderOfflineInProfile(box);
     return;
   }
   const searches = normalizeSearches(b.searches);
@@ -8259,7 +8341,22 @@ async function offlinePut(record){
     tx.onerror = tx.onabort = () => reject(tx.error || new Error('写入失败'));
   });
 }
-
+// ★ 批量写入分片（分批 transaction，比逐条 put 快很多）
+async function offlinePutMany(records){
+  if(!records || !records.length) return true;
+  const CHUNK = 50;
+  for(let i = 0; i < records.length; i += CHUNK){
+    const chunk = records.slice(i, i + CHUNK);
+    const tx = await offlineTx('readwrite');
+    await new Promise((resolve, reject) => {
+      const store = tx.objectStore(OFFLINE.store);
+      chunk.forEach(r => store.put(r));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('写入失败'));
+    });
+  }
+  return true;
+}
 async function offlineGet(id){
   const tx = await offlineTx('readonly');
   return new Promise((resolve, reject) => {
@@ -8341,9 +8438,9 @@ function setCacheToast(show, text, pct){
 
 function cancelCurrentCache(){
   OFFLINE._cancel = true;
+  if(OFFLINE._abortCtrl){ try{ OFFLINE._abortCtrl.abort(); }catch(e){} }
   setCacheToast(true, '正在取消…', 0);
 }
-
 async function cacheCurrentEpisode(){
   if(!state.current) return toast('请先打开一部影片');
   const line = state.lines[state.lineIdx];
@@ -8362,10 +8459,12 @@ async function cacheCurrentEpisode(){
   }
 
   OFFLINE._cancel = false;
+  OFFLINE._abortCtrl = new AbortController();
+  const abortCtrl = OFFLINE._abortCtrl;
   setCacheToast(true, '正在解析 m3u8…', 2);
 
   try{
-    const res = await fetch(url);
+    const res = await fetch(url, { signal: abortCtrl.signal });
     if(!res.ok) throw new Error('m3u8 HTTP ' + res.status);
     const text = await res.text();
     const parsed = parseM3U8(text, url);
@@ -8383,21 +8482,48 @@ async function cacheCurrentEpisode(){
       return toast('❌ 未解析到分片，无法缓存');
     }
 
-    const blobs = [];
+    // ★ 并发下载分片（6 路并发）
+    const CONCURRENCY = Math.min(6, parsed.segs.length);
+    const total = parsed.segs.length;
+    const blobs = new Array(total);
     let totalBytes = 0;
-    for(let i = 0; i < parsed.segs.length; i++){
-      if(OFFLINE._cancel) throw new Error('__CANCEL__');
-      const segUrl = parsed.segs[i];
-      const r = await fetch(segUrl);
-      if(!r.ok) throw new Error('分片 ' + (i+1) + ' 下载失败 (HTTP ' + r.status + ')');
-      const b = await r.blob();
-      blobs.push(b);
-      totalBytes += b.size;
-      const pct = 5 + Math.round((i + 1) / parsed.segs.length * 90);
-      setCacheToast(true,
-        '缓存中 ' + (i+1) + '/' + parsed.segs.length + ' · ' + fmtBytes(totalBytes),
-        pct);
+    let doneCount = 0;
+    let cursor = 0;
+    let failedErr = null;
+    const startPct = 5;
+    const endPct = 95;
+
+    async function worker(){
+      while(true){
+        if(OFFLINE._cancel) return;
+        if(failedErr) return;
+        const i = cursor++;
+        if(i >= total) return;
+        try{
+          const r = await fetch(parsed.segs[i], { signal: abortCtrl.signal });
+          if(!r.ok) throw new Error('分片 ' + (i + 1) + ' 下载失败 (HTTP ' + r.status + ')');
+          const b = await r.blob();
+          blobs[i] = b;
+          totalBytes += b.size;
+          doneCount++;
+          const pct = startPct + Math.round(doneCount / total * (endPct - startPct));
+          setCacheToast(true,
+            '缓存中 ' + doneCount + '/' + total + ' · ' + fmtBytes(totalBytes),
+            pct);
+        }catch(e){
+          if(e.name === 'AbortError') return;
+          failedErr = e;
+          try{ abortCtrl.abort(); }catch(_){}
+          return;
+        }
+      }
     }
+
+    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+
+    if(OFFLINE._cancel) throw new Error('__CANCEL__');
+    if(failedErr) throw failedErr;
+    if(doneCount < total) throw new Error('部分分片下载失败');
 
     const record = {
       id,
@@ -8412,11 +8538,9 @@ async function cacheCurrentEpisode(){
       createdAt: Date.now()
     };
 
-    const segPromises = blobs.map((b, i) => offlinePut({
-      id: id + '::seg::' + i,
-      blob: b
-    }));
-    await Promise.all(segPromises);
+    setCacheToast(true, '正在写入本机存储…', 96);
+    const segRecords = blobs.map((b, i) => ({ id: id + '::seg::' + i, blob: b }));
+    await offlinePutMany(segRecords);
     await offlinePut(record);
 
     setCacheToast(true, '✅ 缓存完成 · ' + fmtBytes(totalBytes), 100);
@@ -8424,14 +8548,16 @@ async function cacheCurrentEpisode(){
     toast('✅ 已缓存：' + record.movieName + ' · ' + record.epName);
   }catch(e){
     setCacheToast(false);
-    if(e.message === '__CANCEL__') toast('已取消缓存');
-    else{
+    if(e.message === '__CANCEL__' || e.name === 'AbortError'){
+      toast('已取消缓存');
+    }else{
       console.warn('[离线缓存]', e);
       toast('❌ 缓存失败：' + (e.message || '未知错误'));
     }
+  }finally{
+    OFFLINE._abortCtrl = null;
   }
 }
-
 function fmtBytes(n){
   n = Number(n) || 0;
   if(n < 1024) return n + ' B';
@@ -8458,11 +8584,51 @@ async function playCachedEpisodeById(id){
   const m3u8Url = URL.createObjectURL(m3u8Blob);
   OFFLINE._blobUrls.push(m3u8Url);
 
+  // ★ 切换到详情页并更新 UI
+  try{
+    const detailEl = document.getElementById('view-detail');
+    if(detailEl && !detailEl.classList.contains('active')){
+      if(typeof showView === 'function') showView('view-detail');
+    }
+    const offDlg = document.getElementById('offlineDialog');
+    if(offDlg && offDlg.classList.contains('open')){
+      document.getElementById('offlineMask')?.classList.remove('open');
+      offDlg.classList.remove('open');
+    }
+    if(typeof state !== 'undefined'){
+      state.current = {
+        vod_name: record.movieName || '离线缓存',
+        vod_pic:  record.pic || '',
+        _offline: true
+      };
+      state.lines = [{
+        name: '离线缓存',
+        episodes: [{
+          name: record.epName || ('第' + ((record.epIdx || 0) + 1) + '集'),
+          url: 'offline://' + id
+        }]
+      }];
+      state.lineIdx = 0;
+      state.epIdx = 0;
+      state.currentUrl = '';
+      if(typeof renderLines === 'function') renderLines();
+      if(typeof updateVideoTitle === 'function') updateVideoTitle();
+      if(typeof updateFavBtn === 'function') updateFavBtn();
+    }
+    const dTitle = document.getElementById('dTitle');
+    if(dTitle) dTitle.textContent = record.movieName || '离线缓存';
+    const dPoster = document.getElementById('dPoster');
+    if(dPoster && record.pic) dPoster.src = record.pic;
+    const dMeta = document.getElementById('dMeta');
+    if(dMeta) dMeta.innerHTML = '<span style="color:var(--brand);font-size:13px">📥 正在播放离线缓存 · 无需网络</span>';
+    const dDesc = document.getElementById('dDesc');
+    if(dDesc) dDesc.textContent = '本集已完整缓存到本机，断网也能播放。';
+  }catch(e){ console.warn('[离线播放 UI]', e); }
+
   const video = document.getElementById('video');
   if(typeof hlsInstance !== 'undefined' && hlsInstance){ try{ hlsInstance.destroy(); }catch(e){} hlsInstance = null; }
   video.removeAttribute('src'); video.load();
-  state.currentUrl = '';
-  showVideoLoading();
+  if(typeof showVideoLoading === 'function') showVideoLoading();
 
   if(window.Hls && Hls.isSupported()){
     hlsInstance = new Hls({ maxBufferLength: 60 });
@@ -8479,7 +8645,6 @@ async function playCachedEpisodeById(id){
   video.play().catch(()=>{});
   toast('▶ 正在播放离线缓存');
 }
-
 async function openOfflineDialog(){
   document.getElementById('offlineMask').classList.add('open');
   document.getElementById('offlineDialog').classList.add('open');
@@ -8652,7 +8817,83 @@ window.addEventListener('pagehide', releaseOfflineBlobs);
     }
   }catch(e){}
 })();
+/* 4.8 个人主页离线缓存管理 */
+async function renderOfflineInProfile(box){
+  box = box || document.getElementById('pfBody');
+  if(!box) return;
+  let all = [];
+  try{ all = await offlineAll(); }catch(e){ all = []; }
+  const records = (Array.isArray(all) ? all : []).filter(r => r && r.movieKey && r.segCount != null);
+  records.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
+  if(!records.length){
+    box.innerHTML = (typeof profileEmpty === 'function')
+      ? profileEmpty('📥', '还没有离线内容', '播放影片时点击剧集旁的 ⬇ 图标即可缓存本集，缓存后可断网观看')
+      : '<div class="empty"><div class="big">📥</div><h3>还没有离线内容</h3><p>播放影片时点击剧集旁的 ⬇ 图标即可缓存本集</p></div>';
+    return;
+  }
+
+  const groups = new Map();
+  records.forEach(r => {
+    if(!groups.has(r.movieKey)) groups.set(r.movieKey, { name: r.movieName, pic: r.pic, items: [] });
+    groups.get(r.movieKey).items.push(r);
+  });
+
+  const totalBytes = records.reduce((s, r) => s + (r.totalBytes || 0), 0);
+
+  let html = `<div class="pf-bar">
+    <span class="pf-bar-t">共 <b>${records.length}</b> 集 · <b>${fmtBytes(totalBytes)}</b> · 保存在本机</span>
+    <button class="mini-btn" style="flex:0 0 auto;width:auto;min-width:0;padding:8px 16px" onclick="clearAllOfflineFromProfile()">🗑 全部清除</button>
+  </div>`;
+
+  groups.forEach((g) => {
+    html += `<div class="date-sep"><span>${esc(g.name)}</span><em>${g.items.length} 集</em></div>`;
+    html += '<div class="his-list">';
+    g.items.forEach(r => {
+      html += `<div class="his-item">
+        <div class="his-poster">${r.pic ? `<img loading="lazy" src="${esc(r.pic)}" alt="" onerror="this.remove()">` : ''}</div>
+        <div class="his-info">
+          <div class="his-name">${esc(r.epName || ('第' + ((r.epIdx || 0) + 1) + '集'))}</div>
+          <div class="his-meta">${fmtBytes(r.totalBytes)} · ${r.segCount} 个分片</div>
+          <div class="his-time">🕒 ${esc(fmtWhen(r.createdAt))}</div>
+        </div>
+        <div class="his-acts">
+          <button onclick="event.stopPropagation();playCachedEpisodeById('${esc(r.id)}')">▶ 播放</button>
+          <button class="danger" onclick="event.stopPropagation();deleteOfflineFromProfile('${esc(r.id)}', ${r.segCount})">✕</button>
+        </div>
+      </div>`;
+    });
+    html += '</div>';
+  });
+
+  box.innerHTML = html;
+}
+
+async function deleteOfflineFromProfile(id, segCount){
+  if(!confirm('确定删除这个缓存？')) return;
+  await offlineDel(id);
+  for(let i = 0; i < (segCount || 0); i++){
+    await offlineDel(id + '::seg::' + i);
+  }
+  toast('已删除');
+  renderOfflineInProfile();
+}
+
+async function clearAllOfflineFromProfile(){
+  if(!confirm('确定要清除全部离线缓存吗？此操作不可恢复。')) return;
+  await offlineClearAll();
+  toast('已清除全部离线缓存');
+  renderOfflineInProfile();
+}
+
+function openOfflineInProfile(){
+  const panel = document.getElementById('panel');
+  if(panel && panel.classList.contains('open') && typeof togglePanel === 'function') togglePanel();
+  pfTab = 'offline';
+  document.querySelectorAll('.pf-tab').forEach(el => el.classList.toggle('active', el.dataset.tab === 'offline'));
+  if(typeof showView === 'function') showView('view-profile');
+  if(typeof renderProfile === 'function') renderProfile();
+}
 console.log('[澪鸢] 观影派对 / 弹幕 / 离线缓存 模块已加载');
 </script>
 </body>
