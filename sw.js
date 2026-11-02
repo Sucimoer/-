@@ -11,8 +11,8 @@ const SHELL = [
   './js/core.js',
   './js/ai.js',
   './js/enhanced.js',
-  './picture/狂三.png',
-  './picture/白.png'
+  './picture/kuangsan.png',
+  './picture/bai.png'
 ];
 
 self.addEventListener('install', function(e){

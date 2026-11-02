@@ -10,7 +10,7 @@
   "background_color": "#0a0c10",
   "theme_color": "#0a0c10",
   "icons": [
-    { "src": "picture/狂三.png", "sizes": "any", "type": "image/png", "purpose": "any" },
-    { "src": "picture/白.png", "sizes": "any", "type": "image/png", "purpose": "maskable" }
+    { "src": "picture/kuangsan.png", "sizes": "any", "type": "image/png", "purpose": "any" },
+    { "src": "picture/bai.png", "sizes": "any", "type": "image/png", "purpose": "maskable" }
   ]
 }
