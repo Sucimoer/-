@@ -173,6 +173,25 @@ main{max-width:1440px;margin:0 auto;padding:24px 24px 80px}
   font-size:11px;background:rgba(0,0,0,.7);color:#ffcf40;
   backdrop-filter:blur(6px);
 }
+/* 已自动禁用线路提示条（设置页数据源列表顶部） */
+.disabled-lines-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:10px 12px;margin-bottom:10px;border-radius:10px;
+  background:rgba(255,120,90,.12);border:1px solid rgba(255,120,90,.35);
+  font-size:12.5px;color:var(--text);flex-wrap:wrap;
+}
+.disabled-lines-banner .dlb-txt{min-width:0;word-break:break-all}
+.disabled-lines-banner .dlb-btn{
+  flex:0 0 auto;padding:5px 12px;border-radius:8px;cursor:pointer;
+  background:rgba(255,120,90,.2);border:1px solid rgba(255,120,90,.5);color:#ff9d87;font-size:12px;
+}
+.disabled-lines-banner .dlb-btn:hover{background:rgba(255,120,90,.32)}
+
+/* 多源角标：显示合并了几个数据源，位于右上角 */
+.poster .badge.multi{
+  left:auto;right:8px;top:8px;color:#7ef0a3;background:rgba(13,60,32,.85);
+  border:1px solid rgba(126,240,163,.45);
+}
 .play-mask{
   position:absolute;inset:0;display:grid;place-items:center;
   font-size:30px;color:#fff;background:rgba(0,0,0,.48);
@@ -1181,3 +1200,22 @@ body.pseudo-fs-lock{overflow:hidden;height:100vh}
   .v-sheet{right:8px;bottom:64px;min-width:120px}
   .v-sheet-item{font-size:12.5px;padding:8px 12px}
 }
+
+/* ========== 搜索结果排序 / 来源筛选工具条 ========== */
+.result-tool-btn{
+  padding:4px 12px;border-radius:999px;border:1px solid var(--line);
+  background:transparent;color:var(--muted);font-size:12px;cursor:pointer;font-family:inherit;
+  transition:all .15s ease;
+}
+.result-tool-btn:hover{ border-color:var(--brand);color:var(--text); }
+.result-tool-btn.active{ background:var(--brand);border-color:var(--brand);color:#04140b;font-weight:700; }
+
+/* ========== 超长剧集“展开全部”按钮 ========== */
+.ep.ep-more{
+  grid-column:1/-1;
+  color:var(--brand,#00d26a);
+  border:1px dashed var(--line,rgba(255,255,255,.08))!important;
+  background:transparent!important;
+  justify-content:center;
+}
+.ep.ep-more:hover{ background:rgba(0,210,106,.08)!important; }

@@ -467,51 +467,66 @@
     addBot('正在为你搜索《' + keyword + '》' + (episode ? '，并准备播放第 ' + episode + ' 集…' : '…'));
     quickSearch(keyword);
     
+    // 【优化】core.js 搜索完成后会派发 lingyuan:searchdone，即时开播；轮询仅作兜底
     let attempts = 0;
+    let opened = false;
+
+    const tryOpen = () => {
+      if (opened) return;
+      if (typeof state === 'undefined' || !state.results || !state.results.length) return;
+      opened = true;
+      
+      const firstMovie = state.results[0];
+      const lines = typeof parseLines === 'function' ? parseLines(firstMovie) : [];
+      let targetLine = 0, targetEp = 0;
+      
+      if (episode && lines.length > 0) {
+        let epNum = parseInt(episode);
+        if (isNaN(epNum)) {
+          const numMap = {'一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '十':10};
+          for (let k in numMap) {
+            if (String(episode).includes(k)) { epNum = numMap[k]; break; }
+          }
+        }
+        
+        let found = false;
+        if (epNum && !isNaN(epNum)) {
+          if (lines[0] && lines[0].episodes[epNum - 1]) {
+            targetLine = 0; targetEp = epNum - 1; found = true;
+          } else {
+            for (let l = 0; l < lines.length; l++) {
+              for (let e = 0; e < lines[l].episodes.length; e++) {
+                const name = lines[l].episodes[e].name;
+                if (name.includes(String(epNum)) || name.includes('0' + epNum) || name.includes(`第${epNum}集`)) {
+                  targetLine = l; targetEp = e; found = true; break;
+                }
+              }
+              if (found) break;
+            }
+          }
+        }
+        if (!found) addBot('⚠️ 未精确找到第 ' + episode + ' 集，默认从第一集开始播放。');
+      }
+      
+      if (typeof openMovie === 'function') {
+        openMovie(firstMovie, { lineIdx: targetLine, epIdx: targetEp });
+        addBot('✅ 已为你打开《' + firstMovie.vod_name + '》并开始播放。');
+      }
+    };
+
+    const onSearchDone = () => {
+      window.removeEventListener('lingyuan:searchdone', onSearchDone);
+      tryOpen();
+    };
+    window.addEventListener('lingyuan:searchdone', onSearchDone);
+
     activePlayTimer = setInterval(() => {
       attempts++;
-      if (typeof state !== 'undefined' && state.results && state.results.length > 0) {
+      tryOpen();
+      if (opened || attempts > 50) {
         clearInterval(activePlayTimer);
-        
-        const firstMovie = state.results[0];
-        const lines = typeof parseLines === 'function' ? parseLines(firstMovie) : [];
-        let targetLine = 0, targetEp = 0;
-        
-        if (episode && lines.length > 0) {
-          let epNum = parseInt(episode);
-          if (isNaN(epNum)) {
-            const numMap = {'一':1, '二':2, '三':3, '四':4, '五':5, '六':6, '七':7, '八':8, '九':9, '十':10};
-            for (let k in numMap) {
-              if (String(episode).includes(k)) { epNum = numMap[k]; break; }
-            }
-          }
-          
-          let found = false;
-          if (epNum && !isNaN(epNum)) {
-            if (lines[0] && lines[0].episodes[epNum - 1]) {
-              targetLine = 0; targetEp = epNum - 1; found = true;
-            } else {
-              for (let l = 0; l < lines.length; l++) {
-                for (let e = 0; e < lines[l].episodes.length; e++) {
-                  const name = lines[l].episodes[e].name;
-                  if (name.includes(String(epNum)) || name.includes('0' + epNum) || name.includes(`第${epNum}集`)) {
-                    targetLine = l; targetEp = e; found = true; break;
-                  }
-                }
-                if (found) break;
-              }
-            }
-          }
-          if (!found) addBot('⚠️ 未精确找到第 ' + episode + ' 集，默认从第一集开始播放。');
-        }
-        
-        if (typeof openMovie === 'function') {
-          openMovie(firstMovie, { lineIdx: targetLine, epIdx: targetEp });
-          addBot('✅ 已为你打开《' + firstMovie.vod_name + '》并开始播放。');
-        }
-      } else if (attempts > 50) {
-        clearInterval(activePlayTimer);
-        addBot('❌ 搜索超时或未找到相关资源，请检查网络或数据源是否正常。');
+        window.removeEventListener('lingyuan:searchdone', onSearchDone);
+        if (!opened) addBot('❌ 搜索超时或未找到相关资源，请检查网络或数据源是否正常。');
       }
     }, 200);
   }
@@ -536,9 +551,10 @@
       };
     }
 
-    const playMatch = t.match(/(?:播放|看|打开)\s*《?([^》]+?)》?(?:\s*第([一二三四五六七八九十百千万\d]+)季)?(?:\s*第([一二三四五六七八九十百千万\d]+)[集话])?$/);
+    // 【修复】裸“看/看看XX”容易误触发点播，现在“看”必须带《》；“播放/打开”保持兼容
+    const playMatch = t.match(/(?:播放|打开)\s*《?([^》]+?)》?(?:\s*第([一二三四五六七八九十百千万\d]+)季)?(?:\s*第([一二三四五六七八九十百千万\d]+)[集话])?\s*$|^看\s*《([^》]+)》/);
     if (playMatch) {
-      let rawName = playMatch[1].trim();
+      let rawName = (playMatch[1] || playMatch[4] || '').trim();
       const season = playMatch[2] ? `第${playMatch[2]}季` : '';
       const episode = playMatch[3];
       

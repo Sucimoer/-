@@ -449,48 +449,42 @@ function normalizeApiUrl(raw){
   return u;
 }
 
-const PROXIES = [
-  { name:'直连',          build:u => u },
-  { name:'corsproxy',     build:u => 'https://corsproxy.io/?' + encodeURIComponent(u) },
-  { name:'allorigins',    build:u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u) },
-  { name:'worker',        build:u => 'https://my-proxy.2169215579.workers.dev/?url=' + encodeURIComponent(u) }
-];
+/* =========================================================
+ *  ★ 搜索结果缓存（10 分钟 TTL，重复搜索秒开）
+ * =======================================================*/
+const SEARCH_CACHE_KEY = 'lingyuan_search_cache_v1';
+const SEARCH_CACHE_TTL = 10 * 60 * 1000;
+const SEARCH_CACHE_MAX_KEYS = 40;
+const SEARCH_CACHE_MAX_BYTES = 200 * 1024; // 单条缓存上限，防 localStorage 撑爆
 
-async function rawFetch(url, perTimeout = 3000, totalTimeout = 15000, signal, validator){
-  const deadline = Date.now() + totalTimeout;
-  let lastErr = null;
-  for(const proxy of PROXIES){
-    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
-
-    const remain = deadline - Date.now();
-    if(remain <= 250) break;
-    const ctrl  = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), Math.min(perTimeout, remain));
-
-    const onAbort = () => { try{ ctrl.abort(); }catch(e){} clearTimeout(timer); };
-    if (signal) signal.addEventListener('abort', onAbort);
-
-    try{
-      const res = await fetch(proxy.build(url), { signal: ctrl.signal });
-      clearTimeout(timer);
-      if (signal) signal.removeEventListener('abort', onAbort);
-      if(!res.ok) throw new Error('HTTP ' + res.status);
-
-      const text = await res.text();
-      if(validator && !validator(text)){
-        lastErr = new Error('响应不是有效 JSON（可能被反爬/劫持，' + proxy.name + '）');
-        continue;
-      }
-      return text;
-    }catch(e){
-      clearTimeout(timer);
-      if (signal) signal.removeEventListener('abort', onAbort);
-      if (e.name === 'AbortError') throw e;
-      lastErr = e;
-    }
-  }
-  throw lastErr || new Error('全部代理失败');
+function searchCacheGet(cacheId){
+  try{
+    const raw = JSON.parse(localStorage.getItem(SEARCH_CACHE_KEY) || '{}');
+    const hit = raw[cacheId];
+    if(hit && Array.isArray(hit.items) && Date.now() - hit.ts < SEARCH_CACHE_TTL) return hit.items;
+    if(hit) delete raw[cacheId];
+  }catch(e){}
+  return null;
 }
+function searchCacheSet(cacheId, items){
+  if(!Array.isArray(items) || !items.length) return;
+  try{
+    const json = JSON.stringify(items);
+    if(json.length > SEARCH_CACHE_MAX_BYTES) return; // 太大不缓存
+    const raw = JSON.parse(localStorage.getItem(SEARCH_CACHE_KEY) || '{}');
+    raw[cacheId] = { ts: Date.now(), items };
+    const keys = Object.keys(raw);
+    if(keys.length > SEARCH_CACHE_MAX_KEYS){
+      keys.sort((a,b) => (raw[a].ts || 0) - (raw[b].ts || 0));
+      keys.slice(0, keys.length - SEARCH_CACHE_MAX_KEYS).forEach(k => delete raw[k]);
+    }
+    localStorage.setItem(SEARCH_CACHE_KEY, JSON.stringify(raw));
+  }catch(e){}
+}
+function searchCacheClear(){
+  try{ localStorage.removeItem(SEARCH_CACHE_KEY); }catch(e){}
+}
+
 function parseApiResponse(text){
   if(!text) return {};
   let s = String(text).trim().replace(/^\uFEFF/, '');
@@ -2026,7 +2020,17 @@ function bindSettingsEvents(){
 
 const PROGRESS_KEY = 'yingchao_progress_v1';
 function progressKey(){ return PROGRESS_KEY + '::' + userId(); }
-function progressMap(){ try{ return JSON.parse(localStorage.getItem(progressKey()) || '{}') || {}; }catch(e){ return {}; } }
+// 【优化】内存缓存进度表，避免每次读取都 JSON.parse 全量数据
+let _progressCache = null;
+let _progressCacheKey = '';
+function progressMap(){
+  const pk = progressKey();
+  if(!_progressCache || _progressCacheKey !== pk){
+    try{ _progressCache = JSON.parse(localStorage.getItem(pk) || '{}') || {}; }catch(e){ _progressCache = {}; }
+    _progressCacheKey = pk;
+  }
+  return _progressCache;
+}
 function getProgress(url){ if(!url) return 0; const m = progressMap(); return (m[url] && m[url].t) || 0; }
 function getProgressEntry(url){ if(!url) return null; return progressMap()[url] || null; }
 function setProgress(url, t, d){
@@ -2048,7 +2052,11 @@ function saveCurrentProgress(){
   const d = v.duration;
   if(isFinite(d) && d > 0 && v.currentTime > 0) setProgress(state.currentUrl, v.currentTime, d);
 }
-function clearAllProgress(){ try{ localStorage.removeItem(progressKey()); }catch(e){} toast('已清除全部播放记录'); }
+function clearAllProgress(){
+  try{ localStorage.removeItem(progressKey()); }catch(e){}
+  _progressCache = null; _progressCacheKey = '';
+  toast('已清除全部播放记录');
+}
 
 const CONFIG_APP_NAME = '澪鸢';
 const CONFIG_FILE_VER = 1;
@@ -2597,7 +2605,7 @@ function initVideoControls(){
 
   v.addEventListener('play',            () => { syncPlayIcon(); scheduleCtrlHide(); });
   v.addEventListener('pause',           () => { syncPlayIcon(); showCtrlLayer(); });
-  v.addEventListener('timeupdate',      () => { syncTimeAndProgress(); });
+  // 【优化】移除此处重复的 timeupdate 绑定（bindVideoEvents 的 handleTimeUpdate 已覆盖）
   v.addEventListener('progress',        syncBuffered);
   v.addEventListener('loadedmetadata',  syncTimeAndProgress);
   v.addEventListener('durationchange',  syncTimeAndProgress);
@@ -2607,7 +2615,20 @@ function initVideoControls(){
   v.addEventListener('playing',         hideVideoLoading);
   v.addEventListener('canplay',         hideVideoLoading);
   v.addEventListener('canplaythrough',  hideVideoLoading);
-  v.addEventListener('error',           hideVideoLoading);
+  v.addEventListener('error', () => {
+    hideVideoLoading();
+    // 【新功能】原生播放源失败时自动尝试同片下一条线路（每条线路最多自动重试 1 次，防死循环）
+    if(state.currentUrl && state.hlsAutoRetried !== state.currentUrl){
+      state.hlsAutoRetried = state.currentUrl;
+      const nextIdx = state.lineIdx + 1;
+      const nextLine = state.lines[nextIdx];
+      if(nextLine && nextLine.episodes && nextLine.episodes[state.epIdx]){
+        toast('线路加载失败，正在尝试下一条线路…');
+        playEpisode(nextIdx, state.epIdx);
+        return;
+      }
+    }
+  });
   v.addEventListener('seeked',          hideVideoLoading);
   v.addEventListener('emptied',         hideVideoLoading);
 
@@ -2746,40 +2767,78 @@ window.addEventListener('popstate', function(e){
   }
 });
 
-async function fetchOne(api, kw, timeout = 15000, signal){
-  if(api.type === 'animegarden') return fetchAnimeGarden(api, kw, timeout, signal);
+async function fetchOne(api, kw, timeout = 15000, signal, noCache){
+  if(api.type === 'animegarden') return fetchAnimeGarden(api, kw, timeout, signal, noCache);
 
-  const targetUrl = `${api.url}?ac=detail&wd=${encodeURIComponent(kw)}`;
+  const cacheId = api.id + '::' + cyrb53(kw);
+  if(!noCache){
+    const cached = searchCacheGet(cacheId);
+    if(cached) return cached;
+  }
+
+  // 【修改点1】苹果CMS 标准搜索必须带 ac=videolist，否则部分源忽略 wd 直接返回全站列表
+  // （LibreTV 的 config.js 同样用 ?ac=videolist&wd=）。2026-11-02 修复。
+  const sep = api.url.includes('?') ? '&' : '?';
+  const targetUrl = `${api.url}${sep}ac=videolist&wd=${encodeURIComponent(kw)}`;
+  
+  // 【修改点2】代理兜底：直连失败自动切到自建 worker。
+  // 2026-11-02 修复：公共代理 cors.lol(429)/codetabs(超时)/allorigins(超时) 已全部失效，删除；
+  // 原 worker 地址拼写错误(https://https://...//)导致从未被调用，已修正。
   const urlsToTry = [
-    targetUrl,
-    `https://my-proxy.2169215579.workers.dev/?url=${encodeURIComponent(targetUrl)}`
+    targetUrl, // 尝试直连（部分接口带 CORS 头时可直接成功，如 heimuer）
+    `${location.origin}/proxy?url=${encodeURIComponent(targetUrl)}`, // 同源本地代理（node server.js 提供；file:// 下 origin 为 "null"，自动跳过）
+    `https://lingyuan-proxy.2169215579.workers.dev/?url=${encodeURIComponent(targetUrl)}` // 自建 worker 代理（需本机 DNS 未被污染才能连通）
   ];
 
-  for (let url of urlsToTry) {
+  // 【优化】单地址 4s 超时 + 每源总预算 12s：失败源快速退出，不再拖慢整次搜索
+  const deadline = Date.now() + Math.min(timeout, 12000);
+  let lastErr = null;
+
+  for (const url of urlsToTry) {
+    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const remain = deadline - Date.now();
+    if (remain <= 300) break;
+
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeout);
+    const timer = setTimeout(() => ctrl.abort(), Math.min(4000, remain));
+    const onAbort = () => { try{ ctrl.abort(); }catch(e){} clearTimeout(timer); };
+    if (signal) signal.addEventListener('abort', onAbort);
 
     try {
       const res = await fetch(url, { signal: ctrl.signal });
       clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
       if (!res.ok) continue;
 
       const text = await res.text();
-      const cleanText = text.trim().replace(/^\uFEFF/, '');
-      
-      if (!cleanText.startsWith('{') && !cleanText.startsWith('[')) continue;
-
-      const data = JSON.parse(cleanText);
+      // 【优化】复用 parseApiResponse：兼容 BOM、前后空白、JSONP(callback({...})) 包裹
+      const data = parseApiResponse(text);
       if (data && data.list && Array.isArray(data.list)) {
-        return data.list.filter(it => it && it.vod_name).map(item => ({ ...item, _source: api.name, _sourceId: api.id }));
+        // 【自动禁用支持】登记该源的所有线路名 → 数据源 id（播放失败时据此定位可禁用的数据源）
+        data.list.forEach(it => {
+          if(it && it.vod_play_from){
+            String(it.vod_play_from).split('$$$').forEach(f => { if(f && f !== 'no' && f !== 'NO') lineSourceMap[f] = api.id; });
+          }
+        });
+        const items = data.list.filter(it => it && it.vod_name)
+          .map(item => ({ ...item, _source: api.name, _sourceId: api.id }));
+        if(!noCache) searchCacheSet(cacheId, items);
+        return items;
       }
+      lastErr = new Error('响应格式异常（' + api.name + '）');
     } catch (e) {
       clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      if (e.name === 'AbortError'){
+        if (signal && signal.aborted) throw e; // 搜索被新请求中止
+        continue; // 单地址超时，换下一个代理
+      }
+      lastErr = e;
     }
   }
   return [];
 }
-async function fetchAnimeGarden(api, kw, timeout = 15000, signal){
+async function fetchAnimeGarden(api, kw, timeout = 15000, signal, noCache){
   const baseUrl = api.url || 'https://api.animes.garden/resources';
   const url = new URL(baseUrl);
   url.searchParams.set('search', kw); 
@@ -2787,27 +2846,42 @@ async function fetchAnimeGarden(api, kw, timeout = 15000, signal){
   url.searchParams.set('pageSize', '50');
 
   const targetUrl = url.toString();
+  const cacheId = api.id + '::' + cyrb53(kw);
+  if(!noCache){
+    const cached = searchCacheGet(cacheId);
+    if(cached) return cached;
+  }
+
+  // 2026-11-02 修复：删除已失效公共代理(cors.lol 429/codetabs 超时/旧 worker 拼写错误)，
+  // 改为 直连 → 同源本地 /proxy → 自建 worker lingyuan-proxy
   const urlsToTry = [
     targetUrl,
-    `https://my-proxy.2169215579.workers.dev/?url=${encodeURIComponent(targetUrl)}`
+    `${location.origin}/proxy?url=${encodeURIComponent(targetUrl)}`,
+    `https://lingyuan-proxy.2169215579.workers.dev/?url=${encodeURIComponent(targetUrl)}`
   ];
 
+  const deadline = Date.now() + Math.min(timeout, 12000);
+
   for (const tryUrl of urlsToTry) {
+    if (signal && signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    const remain = deadline - Date.now();
+    if (remain <= 300) break;
+
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), timeout);
+    const timer = setTimeout(() => ctrl.abort(), Math.min(4000, remain));
+    const onAbort = () => { try{ ctrl.abort(); }catch(e){} clearTimeout(timer); };
+    if (signal) signal.addEventListener('abort', onAbort);
 
     try {
       const res = await fetch(tryUrl, { signal: ctrl.signal });
       clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
       if (!res.ok) continue;
 
       const text = await res.text();
-      const cleanText = text.trim().replace(/^\uFEFF/, '');
-      if (!cleanText.startsWith('{') && !cleanText.startsWith('[')) continue;
-
-      const data = JSON.parse(cleanText);
+      const data = parseApiResponse(text);
       if (data.status === 'OK' && Array.isArray(data.resources)) {
-        return data.resources.map(item => {
+        const items = data.resources.map(item => {
           const title = item.title || '未知资源';
           const magnet = item.magnet || '';
           const size = item.size ? formatSize(item.size) : '';
@@ -2823,9 +2897,16 @@ async function fetchAnimeGarden(api, kw, timeout = 15000, signal){
             _fansub: fansub, _publisher: publisher, _href: item.href || '' 
           };
         });
+        if(!noCache) searchCacheSet(cacheId, items);
+        return items;
       }
     } catch (e) {
       clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', onAbort);
+      if (e.name === 'AbortError'){
+        if (signal && signal.aborted) throw e;
+        continue;
+      }
     }
   }
   return [];
@@ -2839,6 +2920,41 @@ function formatSize(bytes){
 }
 let currentSearchController = null;
 
+/* =========================================================
+ *  ★ 搜索结果规范化 / 相关性排序（新功能：排序·筛选）
+ * =======================================================*/
+function normalizeMovieName(s){
+  // 【修正】只合并"标题内容相同"的条目（跨源去重）：保留「第X季」、[电影解说]、~副标题 等区分性内容，
+  // 仅去掉年份括号与画质/格式后缀（同一作品的跨源写法差异）。
+  return String(s || '').trim().replace(/\s+/g, ' ')
+    .replace(/[（(]\s*(?:19|20)\d{2}\s*[)）]/g, '')   // 去（2023）/(2023) 年份括号
+    .replace(/\s*(第[一二三四五六七八九十百\d]+季)/g, '$1') // 规整 " 第二季" -> "第二季"（跨源写法差异）
+    .replace(/（(?:高清|超清|完整版|全集|国语|粤语|中字|BD|HD|4K|1080P|720P|蓝光|重制|剧场版|OVA|SP)）/g, '')
+    .replace(/\((?:HD|BD|4K|1080P|720P|Remastered|WEB)\)/gi, '')
+    .replace(/(?:高清|超清|完整版|全集|国语|粤语|中字|BD|HD|4K|1080P|720P|蓝光)\s*$/gi, '')
+    .trim().toLowerCase();
+}
+function relevanceScore(m, k){
+  if(!k) return 0;
+  const n = (m.vod_name || '').toLowerCase();
+  if(n === k) return 100;
+  if(n.startsWith(k)) return 80;
+  if(n.includes(k)) return 60;
+  if(k.split(/\s+/).filter(Boolean).every(t => n.includes(t))) return 40;
+  return 0;
+}
+function sortResultList(list){
+  const k = (state.keyword || '').toLowerCase();
+  const mode = state.resultSort || 'relevance';
+  list.sort((a, b) => {
+    let d = 0;
+    if(mode === 'year')  d = (parseInt(b.vod_year) || 0) - (parseInt(a.vod_year) || 0);
+    else if(mode === 'score') d = (parseFloat(b.vod_score) || 0) - (parseFloat(a.vod_score) || 0);
+    if(d !== 0) return d;
+    return relevanceScore(b, k) - relevanceScore(a, k);
+  });
+}
+
 async function doSearch(kw){
   kw = (kw ?? $('#kw').value).trim();
   if(!kw){ toast('请输入搜索关键词'); return; }
@@ -2850,6 +2966,8 @@ async function doSearch(kw){
   const searchSignal = currentSearchController.signal;
 
   $('#kw').value = kw; state.keyword = kw; state.results = [];
+  state.resultFilterSource = ''; // 新搜索重置来源筛选，保留排序模式
+  state.resultSort = state.resultSort || 'relevance';
   hideSearchDrop(); addSearch(kw);
 
   if(SETTINGS.dataMode === 'web'){ stopVideo(); doWebSearch(kw); return; }
@@ -2869,7 +2987,15 @@ async function doSearch(kw){
   function paint(){
     if(searchSignal.aborted) return;
     if(!state.keyword) return;
-    state.results = [...map.values()];
+    let list = [...map.values()];
+    // 【修复】相关性兜底过滤：与关键词完全无关的条目一律不展示（防混入全站列表）
+    const k = String(state.keyword || '').trim().toLowerCase();
+    list = list.filter(m => relevanceScore(m, k) > 0);
+    if(state.resultFilterSource){
+      list = list.filter(m => (m._source === state.resultFilterSource || (m._allSources || []).includes(state.resultFilterSource)));
+    }
+    sortResultList(list);
+    state.results = list;
     if(!state.results.length){
       $('#resultMeta').innerHTML = `<span>正在搜索 <b>${esc(kw)}</b> …（已扫描 ${done}/${total} 个源）</span>`;
       if(!everPainted){
@@ -2881,7 +3007,11 @@ async function doSearch(kw){
     const srcList = [...sourceHits];
     $('#resultMeta').innerHTML =
       `<span>共找到 <b>${state.results.length}</b> 部作品 · 已扫描 <b>${done}/${total}</b> 个源</span>
-       <div class="src-badges">${srcList.map(s => `<span class="src-badge">${esc(s)}</span>`).join('')}</div>`;
+       <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px">
+         <span style="font-size:12px;color:var(--muted)">排序</span>
+         ${['relevance','year','score'].map(mode => `<button class="result-tool-btn${state.resultSort === mode ? ' active' : ''}" data-sort="${mode}">${{relevance:'相关性',year:'最新',score:'评分'}[mode]}</button>`).join('')}
+         ${srcList.length > 1 ? `<span style="font-size:12px;color:var(--muted);margin-left:4px">来源</span>` + srcList.map(s => `<button class="result-tool-btn${state.resultFilterSource === s ? ' active' : ''}" data-src="${esc(s)}">${esc(s)}</button>`).join('') : ''}
+       </div>`;
     $('#resultBody').innerHTML = `<div class="grid">${state.results.map((m, i) => renderCard(m, i)).join('')}</div>`;
   }
   
@@ -2894,10 +3024,26 @@ async function doSearch(kw){
   $('#resultMeta').innerHTML = `<span>正在搜索 <b>${esc(kw)}</b> …</span>`;
   $('#resultBody').innerHTML = `<div class="loading"><div class="spinner"></div><span>正在从 ${total} 个资源站聚合搜索…</span></div>`;
 
+  // 【新功能】排序 / 来源筛选工具条（每次搜索重新绑定，闭包引用最新 paint）
+  $('#resultMeta').onclick = function(e){
+    const sortBtn = e.target.closest('[data-sort]');
+    if(sortBtn){ state.resultSort = sortBtn.dataset.sort; paint(); return; }
+    const srcBtn = e.target.closest('[data-src]');
+    if(srcBtn){
+      const name = srcBtn.dataset.src;
+      state.resultFilterSource = state.resultFilterSource === name ? '' : name;
+      paint();
+    }
+  };
+
     function mergeItems(items){
     if(searchSignal.aborted) return;
+    const k = String(kw || '').trim().toLowerCase();
     (items || []).forEach(item => {
       if(!item || !item.vod_name) return;
+
+      // 【修复】相关性过滤：标题完全不含关键词的丢弃（防止某些源忽略 wd 返回全站列表混入无关内容）
+      if(relevanceScore(item, k) <= 0) return;
 
       const kwSeasonMatch = kw.match(/第([一二三四五六七八九十0-9]+)季/);
       if (kwSeasonMatch) {
@@ -2909,19 +3055,28 @@ async function doSearch(kw){
       }
 
       sourceHits.add(item._source);
-      const key = (item.vod_name.trim().replace(/\s+/g, ' ') + '|' + (item.vod_year || '')).toLowerCase();
+      // 【修复】合并 key 去掉年份：同一 IP 在不同源返回不同年份（2023/2026/空）时也能合并成一张卡
+      const key = normalizeMovieName(item.vod_name);
       const old = map.get(key);
       
       if(!old){ 
-        item._allSources = [item._source]; 
+        item._allSources = [item._source];
+        item._sourceItems = {};
+        item._sourceItems[item._source] = { vod_id: item.vod_id, vod_play_url: item.vod_play_url || '', vod_play_from: item.vod_play_from || '' };
         map.set(key, item); 
       } else {
         if(!old._allSources.includes(item._source)) old._allSources.push(item._source);
+        // 记录每个源自己的 vod_id 与线路（不同源 vod_id 不同，详情必须按各自 id 拉取）
+        if(!old._sourceItems) old._sourceItems = {};
+        if(!old._sourceItems[item._source]){
+          old._sourceItems[item._source] = { vod_id: item.vod_id, vod_play_url: item.vod_play_url || '', vod_play_from: item.vod_play_from || '' };
+        }
         
         if(!old.vod_pic     && item.vod_pic)     old.vod_pic     = item.vod_pic;
         if(!old.vod_content && item.vod_content) old.vod_content = item.vod_content;
         if(!old.vod_score   && item.vod_score)   old.vod_score   = item.vod_score;
         if(!old.vod_remarks && item.vod_remarks) old.vod_remarks = item.vod_remarks;
+        if(!old.vod_year    && item.vod_year)    old.vod_year    = item.vod_year;
 
         if (item.vod_play_url && item.vod_play_url.trim() !== '') {
           const itemFrom = item.vod_play_from || item._source || '未知线路';
@@ -2944,7 +3099,8 @@ async function doSearch(kw){
     return (async () => {
       if (searchSignal.aborted) return;
       try {
-        const items = await fetchOne(api, kw, 15000);
+        // 【优化】传入 searchSignal：新搜索可立即掐断旧请求
+        const items = await fetchOne(api, kw, 15000, searchSignal);
         if (searchSignal.aborted) return;
         mergeItems(items);
       } catch (e) {
@@ -2960,6 +3116,9 @@ async function doSearch(kw){
 
   if(rafId){ cancelAnimationFrame(rafId); rafId = 0; }
   paint();
+
+  // 【新功能】搜索完成事件：供 AI 播放等模块即时感知（替代轮询）
+  try{ window.dispatchEvent(new CustomEvent('lingyuan:searchdone', { detail: { keyword: kw, count: state.results.length } })); }catch(e){}
 
   if(!state.results.length){
     $('#resultMeta').innerHTML = '';
@@ -3060,24 +3219,103 @@ function renderCard(m, idx){
   const year = m.vod_year || '';
   const type = (m.type_name || m.vod_class || '').split(',')[0] || '';
   const badge = m.vod_remarks ? esc(String(m.vod_remarks).slice(0, 20)) : '';
+  const srcCount = (m._allSources && m._allSources.length) || 0;
+  const multi = srcCount > 1 ? `<span class="badge multi">${srcCount}源</span>` : '';
   return `<div class="card" onclick="openDetail(${idx})">
     <div class="poster">
       ${pic ? `<img loading="lazy" decoding="async" src="${pic}" alt="" onerror="this.remove()">` : ''}
       ${badge ? `<span class="badge">${badge}</span>` : ''}
+      ${multi}
       <div class="play-mask">▶</div>
     </div>
     <div class="card-title">${esc(m.vod_name)}</div>
     <div class="card-sub">${esc([year, type, score ? score + '分' : ''].filter(Boolean).join(' · '))}</div>
   </div>`;
 }
+/* =========================================================
+ *  ★ 详情补拉（关键修复）：搜索接口的列表不带 vod_play_url，
+ *    点开影片时若没有线路，按 vod_id 走 ac=detail 拿播放地址
+ * =======================================================*/
+const _detailCache = new Map(); // 会话内缓存，避免重复请求
+async function fetchWithProxies(targetUrl, timeout = 12000){
+  const urlsToTry = [
+    targetUrl,
+    `${location.origin}/proxy?url=${encodeURIComponent(targetUrl)}`, // 同源本地代理（node server.js）
+    `https://lingyuan-proxy.2169215579.workers.dev/?url=${encodeURIComponent(targetUrl)}` // 自建 worker 代理（2026-11-02 已修复拼写）
+  ];
+  const deadline = Date.now() + Math.min(timeout, 12000);
+  for(const url of urlsToTry){
+    const remain = deadline - Date.now();
+    if(remain <= 300) break;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), Math.min(4000, remain));
+    try{
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      if(!res.ok) continue;
+      const data = parseApiResponse(await res.text());
+      if(data && Array.isArray(data.list) && data.list.length) return data.list[0];
+    }catch(e){ clearTimeout(timer); }
+  }
+  return null;
+}
+async function fetchMovieDetail(m){
+  if(!m || !m.vod_id) return null;
+  const candidates = (m._allSources && m._allSources.length)
+    ? m._allSources : (m._source ? [m._source] : []);
+  let got = null;
+  for(const srcName of candidates){
+    const api = APIS.find(a => a.name === srcName || a.id === srcName);
+    if(!api || api.type === 'animegarden') continue;
+    // 【修复】不同源的 vod_id 不同：优先用合并时保存的该源自己的 vod_id
+    const srcItem = m._sourceItems && m._sourceItems[srcName];
+    const vid = srcItem && srcItem.vod_id ? srcItem.vod_id : m.vod_id;
+    const cacheKey = api.id + '::d::' + vid;
+    if(_detailCache.has(cacheKey)){
+      const it = _detailCache.get(cacheKey);
+      if(it){ mergeDetailIntoMovie(m, it); got = m; }
+      continue;
+    }
+    const sep = api.url.includes('?') ? '&' : '?';
+    const item = await fetchWithProxies(`${api.url}${sep}ac=detail&ids=${encodeURIComponent(vid)}`);
+    if(item){
+      item._source = api.name; item._sourceId = api.id;
+      _detailCache.set(cacheKey, item);
+      mergeDetailIntoMovie(m, item); // 逐个源合并线路，最终卡片内多源可切换
+      got = m;
+    }
+  }
+  return got;
+}
+function mergeDetailIntoMovie(m, d){
+  if(!d) return;
+  // 【修复】线路改为"追加"而非覆盖：合并卡里已有的其他源线路不丢失
+  if(d.vod_play_url && !m.vod_play_url){
+    m.vod_play_url  = d.vod_play_url;
+    m.vod_play_from = d.vod_play_from || d._source || '未知线路';
+  } else if(d.vod_play_url && m.vod_play_url && !m.vod_play_url.includes(d.vod_play_url)){
+    m.vod_play_url  += '$$$' + d.vod_play_url;
+    const from = d.vod_play_from || d._source || '未知线路';
+    m.vod_play_from = String(m.vod_play_from || '').split('$$$').filter(Boolean).concat([from]).join('$$$');
+  }
+  if(!m.vod_pic && d.vod_pic)       m.vod_pic     = d.vod_pic;
+  if(!m.vod_content && d.vod_content) m.vod_content = d.vod_content;
+  if(!m.vod_score && d.vod_score)   m.vod_score   = d.vod_score;
+  if(!m.vod_remarks && d.vod_remarks) m.vod_remarks = d.vod_remarks;
+  if(!m.vod_year && d.vod_year)     m.vod_year    = d.vod_year;
+  if(!m.type_name && d.type_name)   m.type_name   = d.type_name;
+}
 function openDetail(idx){ const m = state.results[idx]; if(!m) return; openMovie(m, {}); }
 function openMovie(m, opts){
   opts = opts || {};
   state.current = m;
   state.lines = parseLines(m);
-  if(!state.lines.length){ toast('该资源没有可播放的线路'); }
+  // 搜索接口列表不带播放地址：需要按 vod_id 拉详情（关键修复）
+  const needDetail = !state.lines.length && m.vod_id;
+  if(!state.lines.length && !needDetail){ toast('该资源没有可播放的线路'); }
   state.lineIdx = Math.max(0, Math.min(opts.lineIdx || 0, state.lines.length - 1));
   state.epIdx   = opts.epIdx || 0;
+  state._epExpanded = false;
   $('#dTitle').textContent = m.vod_name || '未知影片';
   const poster = $('#dPoster');
   if(m.vod_pic){ poster.src = m.vod_pic; poster.style.display = ''; } else { poster.removeAttribute('src'); }
@@ -3090,7 +3328,33 @@ function openMovie(m, opts){
   $('#dMeta').innerHTML = metaParts.join(' &nbsp;·&nbsp; ');
   $('#dDesc').textContent = String(m.vod_content || m.vod_blurb || m.vod_remarks || '暂无简介').replace(/<[^>]+>/g, '').trim();
    updateFavBtn(); renderLines(); updateVideoTitle(); showView('view-detail');
-  if(state.lines.length){
+  if(needDetail){
+    $('#epGrid').innerHTML = `<div class="loading" style="grid-column:1/-1"><div class="spinner"></div><span>正在获取播放地址…</span></div>`;
+    const wantEp = Math.max(0, parseInt(opts.epIdx) || 0);
+    fetchMovieDetail(m).then(detail => {
+      if(state.current !== m) return; // 用户已切走
+      if(!detail){
+        $('#epGrid').innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">⚠️</div><h3>获取播放地址失败</h3><p>该数据源可能已失效，换个片源试试</p></div>`;
+        toast('获取播放地址失败，可能是该源已失效');
+        return;
+      }
+      mergeDetailIntoMovie(m, detail);
+      state.lines = sortLinesByPref(parseLines(m));
+      if(!state.lines.length){
+        $('#epGrid').innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="big">⚠️</div><h3>没有可用线路</h3></div>`;
+        toast('没有可用播放线路');
+        return;
+      }
+      state.lineIdx = 0; state.epIdx = 0;
+      $('#dDesc').textContent = String(m.vod_content || m.vod_blurb || m.vod_remarks || '暂无简介').replace(/<[^>]+>/g, '').trim();
+      const np = $('#dPoster');
+      if(m.vod_pic && (!np.src || np.src === location.href)){ np.src = m.vod_pic; np.style.display = ''; }
+      updateFavBtn(); renderLines(); updateVideoTitle();
+      const eps = state.lines[0].episodes;
+      const ei = Math.min(wantEp, eps.length - 1);
+      setTimeout(() => playEpisode(0, ei), 120);
+    });
+  } else if(state.lines.length){
     const li = state.lineIdx;
     const eps = state.lines[li].episodes;
     const ei = Math.max(0, Math.min(state.epIdx, eps.length - 1));
@@ -3105,6 +3369,7 @@ function parseLines(m){
   const urls  = String(m.vod_play_url  || '').split('$$$');
   const lines = [];
   froms.forEach((name, i) => {
+    if(isLineDisabled(name)) return; // 【自动禁用】全局跳过错线路
     const raw = urls[i] || '';
     const episodes = raw.split('#').map(seg => {
       const p = seg.split('$');
@@ -3112,7 +3377,7 @@ function parseLines(m){
       if(p[0] && /^https?:|^magnet:/.test(p[0])) return { name: '第' + (i+1) + '集', url: p[0] };
       return null;
     }).filter(x => x && x.url);
-    if(episodes.length) lines.push({ name, episodes });
+    if(episodes.length) lines.push({ name, episodes, _sourceId: lineSourceMap[name] || '' });
   });
   if(!lines.length && m.vod_play_url && /^https?:|^magnet:/.test(m.vod_play_url)){
     lines.push({ name: '默认线路', episodes: [{ name: '正片', url: m.vod_play_url }] });
@@ -3126,17 +3391,30 @@ function renderLines(){
       ${esc(l.name || ('线路' + (i+1)))}
     </button>`).join('');
   const eps = state.lines[state.lineIdx]?.episodes || [];
-  $('#epGrid').innerHTML = eps.map((ep, j) => `
+  // 【优化】超长剧集（>200 集）默认折叠，避免一次渲染几千个按钮拖慢页面
+  const EP_PAGE = 200;
+  const expanded = !!state._epExpanded || eps.length <= EP_PAGE;
+  const shown = expanded ? eps : eps.slice(0, EP_PAGE);
+  let html = shown.map((ep, j) => `
     <button class="ep${j === state.epIdx ? ' playing' : ''}" data-ep="${j}" data-url="${esc(ep.url)}" onclick="playEpisode(${state.lineIdx}, ${j})">
       <span>${esc(ep.name)}</span>
       <span class="ep-download" title="下载本集">⬇</span>
     </button>`).join('');
+  if(!expanded){
+    html += `<button class="ep ep-more" onclick="state._epExpanded = true; renderLines()">展开全部 ${eps.length} 集</button>`;
+  }
+  $('#epGrid').innerHTML = html;
 }
-function switchLine(i){ state.lineIdx = i; state.epIdx = 0; renderLines(); if(state.lines[i]?.episodes.length) playEpisode(i, 0); }
+function switchLine(i){
+  state.lineIdx = i; state.epIdx = 0; state._epExpanded = false;
+  renderLines(); if(state.lines[i]?.episodes.length) playEpisode(i, 0);
+}
 function playEpisode(lineIdx, epIdx){
   const line = state.lines[lineIdx]; if(!line) return;
   const ep = line.episodes[epIdx]; if(!ep) return;
   state.lineIdx = lineIdx; state.epIdx = epIdx;
+  state._lineOkName = null; // 换线路/换集后重新评估"是否播放成功"
+  _preloadedNextUrl = ''; // 切换集数后允许重新预加载下一集
   document.querySelectorAll('#epGrid .ep').forEach((el, k) => { el.classList.toggle('playing', k === epIdx); });
   document.querySelectorAll('.line-tab').forEach((el, k) => { el.classList.toggle('active', k === lineIdx); });
     updateVideoTitle(); playVideo(ep.url); recordHistory();
@@ -3144,6 +3422,20 @@ function playEpisode(lineIdx, epIdx){
 }
 function hasNextEpisode(){ const line = state.lines[state.lineIdx]; return !!(line && (state.epIdx + 1) < line.episodes.length); }
 function playNextEpisode(){ if(!hasNextEpisode()){ toast('已经是最后一集了'); return; } playEpisode(state.lineIdx, state.epIdx + 1); }
+
+/* 【新功能】下一集预加载：播放到片尾前预热下一集，连播零等待 */
+let _preloadedNextUrl = '';
+function preloadNextEpisode(){
+  if(SETTINGS.autoNext === false) return;
+  if(!hasNextEpisode()) return;
+  const line = state.lines[state.lineIdx];
+  const ep = line && line.episodes[state.epIdx + 1];
+  if(!ep || !ep.url || ep.url.startsWith('magnet:')) return;
+  if(_preloadedNextUrl === ep.url) return;
+  _preloadedNextUrl = ep.url;
+  // 仅发一个 no-cors GET 预热 DNS/TCP/CDN 缓存，失败静默
+  try{ fetch(ep.url, { mode:'no-cors', cache:'no-store' }).then(() => {}, () => {}); }catch(e){}
+}
 function startOutroCountdown(){
   if(state.outroRunning || state.outroCancelled) return;
   if(!hasNextEpisode()) return;
@@ -3161,6 +3453,73 @@ function startOutroCountdown(){
 function updateOutroBar(left){ const t = $('#outroText'); if(t) t.textContent = `片尾跳过中 · ${left}s 后播放下一集`; }
 function cancelOutro(){ clearOutro(); state.outroCancelled = true; toast('已取消跳过片尾'); }
 
+/* =========================================================
+ *  ★ 播放线路偏好（全局学习）：哪个数据源历史上能播，全局优先用它；
+ *    失败自动顺延并降权，下次进详情不再从固定第一条开始试。
+ * =======================================================*/
+const LINE_PREF_KEY = 'lingyuan_line_pref_v1';
+function loadLinePrefs(){ try{ return JSON.parse(localStorage.getItem(LINE_PREF_KEY) || '{}'); }catch(e){ return {}; } }
+function saveLinePrefs(p){ try{ localStorage.setItem(LINE_PREF_KEY, JSON.stringify(p)); }catch(e){} }
+// 偏好分：成功次数越多越高，失败扣同权重（净 ok-fail），最近成功有 30 天衰减加成
+function linePrefScore(name){
+  const rec = loadLinePrefs()[name];
+  if(!rec) return 0;
+  const recency = Math.max(0, 1 - (Date.now() - (rec.last || 0)) / (30 * 24 * 3600 * 1000));
+  return ((rec.ok || 0) - (rec.fail || 0)) * 3 + recency * 2;
+}
+// 把线路按偏好分降序重排（稳定：同分保持原有顺序）
+function sortLinesByPref(lines){
+  const scored = lines.map((l, i) => ({ l, s: linePrefScore(l.name || ('线路' + (i + 1))) }));
+  scored.sort((a, b) => (b.s - a.s) || 0);
+  return scored.map(x => x.l);
+}
+function recordLineOk(name){
+  if(!name) return;
+  const p = loadLinePrefs();
+  const rec = p[name] || { ok: 0, fail: 0 };
+  rec.ok = (rec.ok || 0) + 1; rec.last = Date.now();
+  p[name] = rec; saveLinePrefs(p);
+}
+function recordLineFail(name){
+  if(!name) return;
+  const p = loadLinePrefs();
+  const rec = p[name] || { ok: 0, fail: 0 };
+  rec.fail = (rec.fail || 0) + 1; rec.last = Date.now();
+  p[name] = rec; saveLinePrefs(p);
+}
+
+/* =========================================================
+ *  ★ 播放失败自动禁用线路（全局）：某线路播放不了 → 直接禁用，
+ *    所有影片都不再尝试它；设置页可一键恢复。
+ * =======================================================*/
+const lineSourceMap = {};      // 线路名 -> 数据源 id（fetchOne 时登记）
+const DISABLED_LINES_KEY = 'lingyuan_disabled_lines_v1';
+function loadDisabledLines(){ try{ return JSON.parse(localStorage.getItem(DISABLED_LINES_KEY) || '[]'); }catch(e){ return []; } }
+function saveDisabledLines(list){ try{ localStorage.setItem(DISABLED_LINES_KEY, JSON.stringify(list)); }catch(e){} }
+function isLineDisabled(name){ return loadDisabledLines().includes(name); }
+function disableLine(name){
+  if(!name) return;
+  const list = loadDisabledLines();
+  if(!list.includes(name)){ list.push(name); saveDisabledLines(list); }
+}
+function clearDisabledLines(){ saveDisabledLines([]); }
+// 当前线路播放失败：禁用该线路 → 按偏好重建线路（剔除全部已禁用线路）→ 自动播下一条可用线路
+function autoDisableAndSwitch(){
+  const cur = state.lines[state.lineIdx];
+  if(!cur) return false;
+  disableLine(cur.name);
+  recordLineFail(cur.name);
+  state.lines = sortLinesByPref(parseLines(state.current)).filter(l => !isLineDisabled(l.name));
+  const nextLine = state.lines[0];
+  if(nextLine && nextLine.episodes && nextLine.episodes.length){
+    const ei = Math.max(0, Math.min(state.epIdx || 0, nextLine.episodes.length - 1));
+    toast('线路「' + cur.name + '」不可用，已自动禁用，改用「' + nextLine.name + '」…');
+    renderLines(); playEpisode(0, ei);
+    return true;
+  }
+  return false;
+}
+
 function playVideo(url){
   saveCurrentProgress(); clearOutro();
   state.currentUrl = ''; state.resumeAt = 0; state.resumeReason = '';
@@ -3175,8 +3534,10 @@ function playVideo(url){
   }
   const video = $('#video');
   if(hlsInstance){ hlsInstance.destroy(); hlsInstance = null; }
+  video.onerror = null; // 清理上一次直连播放残留的换线监听
   video.removeAttribute('src'); video.load(); resetQualityUI();
   state.currentUrl = url || ''; state.outroCancelled = false; lastProgressSave = 0;
+  state.hlsAutoRetried = ''; // 每次新播放重置“自动换线”标记
   showVideoLoading();
   const isM3u8 = /\.m3u8(\?|#|$)/i.test(url);
   if(isM3u8){
@@ -3215,12 +3576,26 @@ function playVideo(url){
         if(data.fatal){
           console.warn('HLS error:', data);
           hideVideoLoading();
+          // 【自动禁用】该线路播放失败 → 禁用并自动切下一条可用线路（每 url 只处理一次防死循环）
+          if(state.hlsAutoRetried !== url){
+            state.hlsAutoRetried = url;
+            if(autoDisableAndSwitch()) return;
+          }
           toast('视频加载失败，可能是资源失效，请换其他线路');
         }
       });
     }else if(video.canPlayType('application/vnd.apple.mpegurl')){ video.src = url; hideQualityUI(); }
     else{ hideVideoLoading(); toast('当前浏览器不支持 HLS 播放'); return; }
-  }else{ video.src = url; hideQualityUI(); }
+  }else{
+    video.src = url; hideQualityUI();
+    // 【新功能】直连 mp4/flv 等加载失败时同样自动换下一条线路（一次性监听，成功后下次自动清掉）
+    video.onerror = () => {
+      if(state.hlsAutoRetried === url) return;
+      state.hlsAutoRetried = url;
+      if(autoDisableAndSwitch()) return;
+      toast('视频加载失败，可能是资源失效，请换其他线路');
+    };
+  }
   video.play().catch(() => {});
 }
 function seekWithRetry(video, t, attempt){
@@ -3254,12 +3629,20 @@ function handleTimeUpdate(){
   const v = $('#video'); if(!v || !state.currentUrl) return;
   const t = v.currentTime; const d = v.duration;
   if(!isFinite(d) || d <= 0) return;
+  // 【新功能】实际播放超过 3 秒视为该线路可用 → 记录全局偏好（下次所有影片优先此源）
+  const line = state.lines[state.lineIdx];
+  if(line && d > 5 && t > 3 && state._lineOkName !== line.name){
+    state._lineOkName = line.name;
+    recordLineOk(line.name);
+  }
   syncTimeAndProgress();
   if(Date.now() - lastProgressSave > 3000){ lastProgressSave = Date.now(); setProgress(state.currentUrl, t, d); }
   if(SETTINGS.skipOutro && (+SETTINGS.outroSec) > 0 && !state.outroCancelled && !state.outroRunning
      && d > (+SETTINGS.outroSec) + 5 && (d - t) <= (+SETTINGS.outroSec) && (d - t) > 0.3){
     startOutroCountdown();
   }
+  // 【优化】接近片尾时预加载下一集 manifest，连播更流畅
+  if(d - t <= 35 && d - t > 0) preloadNextEpisode();
 }
 function handleEnded(){
   if(state.currentUrl) setProgress(state.currentUrl, 0, 0);
@@ -3306,21 +3689,106 @@ function setQuality(level){
   closeVSheet();
 }
 
+function proxyUrl(u){
+  const o = location.origin;
+  if(o && o !== 'null' && /^https?:/i.test(o)) return `${o}/proxy?url=${encodeURIComponent(u)}`;
+  return u; // file:// 下无本地代理，回退直连（会跨域失败，页面会提示改用 localhost:8123）
+}
+function resolveUrl(base, u){
+  if(/^https?:|^magnet:/i.test(u)) return u;
+  try{ return new URL(u, base).href; }catch(e){ return u; }
+}
+function fetchText(u){
+  return fetch(u).then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+}
 function downloadEpisode(url, event){
   if(event) event.stopPropagation();
   if(!url) return;
+  if(url.startsWith('offline://')){ toast('这是离线缓存地址，直接观看即可，无需下载'); return; }
   if(url.startsWith('magnet:')){
     navigator.clipboard.writeText(url).then(() => toast('✅ 磁力链接已复制！请使用 qBittorrent / IDM 等工具下载'))
       .catch(() => prompt('手动复制磁力链接：', url));
     return;
   }
-  if(url.includes('.mp4')){
+  if(/\.m3u8(\?|#|$)/i.test(url)){ downloadM3u8(url); return; }
+  if(/\.(mp4|flv|ts|mkv|webm)(\?|#|$)/i.test(url) || /^https?:\/\//i.test(url)){
+    downloadDirectFile(url); return;
+  }
+  window.open(url, '_blank');
+}
+function downloadDirectFile(url){
+  const name = ((state.current && state.current.vod_name) || 'video') + '.mp4';
+  toast('正在下载 ' + name + ' …');
+  fetch(proxyUrl(url)).then(r => {
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.blob();
+  }).then(blob => {
+    const objUrl = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = ((state.current && state.current.vod_name) || 'video') + '.mp4';
+    a.href = objUrl; a.download = name;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    toast('开始下载 MP4');
-  }else if(url.includes('.m3u8')){ copyDownloadLink(url); }
-  else{ window.open(url, '_blank'); }
+    setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+    toast('✅ 已下载 ' + name + '（' + (blob.size / 1048576).toFixed(1) + ' MB），离线可播');
+  }).catch(e => {
+    toast('下载失败：' + e.message + '，已复制链接，可用下载器');
+    copyDownloadLink(url);
+  });
+}
+async function downloadM3u8(url){
+  toast('正在解析 m3u8 清单…');
+  try{
+    const base = url.slice(0, url.lastIndexOf('/') + 1);
+    let manifest = await fetchText(proxyUrl(url));
+    if(/#EXT-X-STREAM-INF/i.test(manifest)){
+      // 多码率主清单：挑带宽最大的码率
+      const lines = manifest.split(/\r?\n/);
+      let best = null;
+      for(let i = 0; i < lines.length; i++){
+        if(/^#EXT-X-STREAM-INF/i.test(lines[i])){
+          const uri = lines[i + 1];
+          if(uri && !/^#/.test(uri)){
+            const bw = parseInt((lines[i].match(/BANDWIDTH=(\d+)/i) || [])[1] || '0', 10);
+            if(!best || bw > best.bw) best = { bw, uri: resolveUrl(base, uri) };
+          }
+        }
+      }
+      if(!best) throw new Error('无法解析多码率清单');
+      toast('已选最高码率，继续解析…');
+      manifest = await fetchText(proxyUrl(best.uri));
+    }
+    if(/#EXT-X-KEY/i.test(manifest)){
+      toast('该资源已加密，网页无法直接下载');
+      copyDownloadLink(url); return;
+    }
+    const segLines = manifest.split(/\r?\n/);
+    const segs = [];
+    for(let i = 0; i < segLines.length; i++){
+      if(/^#EXTINF/i.test(segLines[i])){
+        const uri = segLines[i + 1];
+        if(uri && !/^#/.test(uri)) segs.push(resolveUrl(base, uri));
+      }
+    }
+    if(!segs.length) throw new Error('清单中没有可下载的分片');
+    toast('共 ' + segs.length + ' 个分片，开始下载（请保持页面打开）…');
+    const blobs = [];
+    for(let i = 0; i < segs.length; i++){
+      const r = await fetch(proxyUrl(segs[i]));
+      if(!r.ok) throw new Error('分片 ' + (i + 1) + ' 失败 HTTP ' + r.status);
+      blobs.push(await r.blob());
+      if(i % 5 === 0 || i === segs.length - 1) toast('下载分片 ' + (i + 1) + '/' + segs.length + ' …');
+    }
+    const all = new Blob(blobs, { type: 'video/mp4' });
+    const name = ((state.current && state.current.vod_name) || 'video') + '.mp4';
+    const objUrl = URL.createObjectURL(all);
+    const a = document.createElement('a');
+    a.href = objUrl; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(objUrl), 5000);
+    toast('✅ 已合并下载 ' + name + '（' + (all.size / 1048576).toFixed(1) + ' MB），离线可播');
+  }catch(e){
+    toast('m3u8 下载失败：' + e.message + '，已复制链接');
+    copyDownloadLink(url);
+  }
 }
 function downloadCurrentEpisode(){
   const line = state.lines[state.lineIdx]; const ep = line && line.episodes[state.epIdx];
@@ -3532,7 +4000,11 @@ async function refreshFavoritePlaylist(movie, f){
       if(!items || !items.length) continue;
       const found = items.find(it => movieKey(it) === f.key)
                  || items.find(it => String(it.vod_name || '').trim() === String(f.name || '').trim());
-      if(found && found.vod_play_url){ target = found; break; }
+      if(found){
+        // 搜索列表不带播放地址：按 vod_id 拉详情（关键修复）
+        let d = found.vod_play_url ? found : await fetchMovieDetail(found);
+        if(d && d.vod_play_url){ target = Object.assign({}, found, d); break; }
+      }
     }catch(e){
       if(e.name === 'AbortError') return;
     }
@@ -3622,10 +4094,18 @@ function togglePanel(){
 }
 function renderApiList(){
   const box = $('#apiList'); if(!box) return;
+  const disabled = loadDisabledLines();
+  let banner = '';
+  if(disabled.length){
+    banner = `<div class="disabled-lines-banner">
+        <div class="dlb-txt">🚫 已自动禁用 ${disabled.length} 个无法播放的线路：${esc(disabled.join('、'))}</div>
+        <button type="button" class="dlb-btn" onclick="clearDisabledLines(); renderApiList(); updateApiCount(); toast('已恢复全部自动禁用的线路')">恢复全部</button>
+      </div>`;
+  }
   if(!APIS.length){
-    box.innerHTML = `<div style="padding:26px 8px;text-align:center;color:var(--muted);font-size:13px">还没有数据源，请在下方添加</div>`;
+    box.innerHTML = banner + `<div style="padding:26px 8px;text-align:center;color:var(--muted);font-size:13px">还没有数据源，请在下方添加</div>`;
   }else{
-    box.innerHTML = APIS.map((a, i) => `
+    box.innerHTML = banner + APIS.map((a, i) => `
       <div class="api-item${a.enabled ? ' on' : ''}${i === editingApiIdx ? ' editing' : ''}" onclick="toggleApi(${i})">
         <input type="checkbox" ${a.enabled ? 'checked' : ''} onclick="event.stopPropagation(); toggleApi(${i}, this.checked)">
         <div class="api-info">

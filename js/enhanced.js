@@ -369,6 +369,7 @@ async function loadDanmakuForCurrent(){
 function startDanmakuLoop(){
   stopDanmakuLoop();
   let lastT = -1;
+  let cursor = 0; // 列表按时间有序，用游标避免每 250ms 全量遍历
   DANMAKU.loopTimer = setInterval(() => {
     if(!DANMAKU.enabled) return;
     const v = document.getElementById('video');
@@ -377,18 +378,27 @@ function startDanmakuLoop(){
 
     if(lastT >= 0 && (t < lastT - 1.5 || t > lastT + 3)){
       clearDanmakuLayer();
+      cursor = 0;
+      // 回退/跳转后重置展示标记，让该位置的弹幕重新出现
+      DANMAKU.list.forEach(d => { d._shown = false; });
     }
     lastT = t;
 
     if(v.paused) return;
 
-    DANMAKU.list.forEach(d => {
-      if(d._shown) return;
-      if(d.time > lastT + 0.15) return;
-      if(d.time < lastT - 0.6) { d._shown = true; return; }
+    const list = DANMAKU.list;
+    // 【优化】从上次位置附近继续扫描（兼容播放中新插入的弹幕，回看 30 条）
+    const backStart = Math.max(0, cursor - 30);
+    let i = backStart;
+    for(; i < list.length; i++){
+      const d = list[i];
+      if(d.time > lastT + 0.15) break; // 已排序，后面的都还没到时间
+      if(d._shown) continue;
+      if(d.time < lastT - 0.6){ d._shown = true; continue; }
       d._shown = true;
       renderDanmakuItem(d);
-    });
+    }
+    if(i > cursor) cursor = i; // 只前进，不回退
   }, 250);
 }
 
@@ -398,6 +408,7 @@ function stopDanmakuLoop(){
 
 function renderDanmakuItem(d){
   if(!DANMAKU.enabled) return;
+  if(danmakuBlocked(d)){ d._shown = true; return; } // 【新功能】屏蔽词/屏蔽用户不渲染
   const layer = document.getElementById('danmakuLayer');
   if(!layer || !d || !d.text) return;
 
@@ -428,6 +439,64 @@ function renderDanmakuItem(d){
   setTimeout(() => {
     if(el.parentNode) el.parentNode.removeChild(el);
   }, dur * 1000 + 200);
+}
+
+/* ---------- 弹幕屏蔽（新功能） ---------- */
+function danmakuBlockList(){
+  try{ return JSON.parse(localStorage.getItem('lingyuan_danmaku_block_v1') || '{"words":[],"users":[]}'); }
+  catch(e){ return { words: [], users: [] }; }
+}
+function saveDanmakuBlockList(b){
+  try{ localStorage.setItem('lingyuan_danmaku_block_v1', JSON.stringify(b)); }catch(e){}
+}
+function danmakuBlocked(d){
+  if(!d) return false;
+  const b = danmakuBlockList();
+  const t = String(d.text || '').toLowerCase();
+  const u = String(d.user || '');
+  return b.words.some(w => w && t.includes(String(w).toLowerCase()))
+      || b.users.some(x => x && u === x);
+}
+function openDanmakuBlockCfg(){
+  const b = danmakuBlockList();
+  const words = b.words.join('，') || '（无）';
+  const users = b.users.join('，') || '（无）';
+  const input = prompt(
+    '当前屏蔽词：' + words + '\n当前屏蔽用户：' + users +
+    '\n\n· 输入关键词（多个用英文逗号分隔）→ 屏蔽包含该词的弹幕\n' +
+    '· 输入 "u:用户名" → 屏蔽指定用户\n' +
+    '· 输入 "清空" → 清空全部屏蔽\n' +
+    '· 留空或取消 → 不修改'
+  );
+  if(input == null) return;
+  const v = String(input).trim();
+  if(v === '清空'){
+    saveDanmakuBlockList({ words: [], users: [] });
+    DANMAKU.list.forEach(d => { d._shown = false; });
+    clearDanmakuLayer();
+    toast('已清空弹幕屏蔽列表');
+    return;
+  }
+  if(v.startsWith('u:')){
+    const uname = v.slice(2).trim();
+    if(!uname) return;
+    const nb = danmakuBlockList();
+    if(!nb.users.includes(uname)) nb.users.push(uname);
+    saveDanmakuBlockList(nb);
+    DANMAKU.list.forEach(d => { d._shown = false; });
+    clearDanmakuLayer();
+    toast('已屏蔽用户：' + uname);
+    return;
+  }
+  const ws = v.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+  if(!ws.length) return;
+  const nb = danmakuBlockList();
+  let added = 0;
+  ws.forEach(w => { if(w && !nb.words.includes(w)){ nb.words.push(w); added++; } });
+  saveDanmakuBlockList(nb);
+  DANMAKU.list.forEach(d => { d._shown = false; });
+  clearDanmakuLayer();
+  toast(added ? ('已屏蔽 ' + added + ' 个关键词') : '这些关键词已在屏蔽列表中');
 }
 
 function sendDanmakuFromInput(){
@@ -577,35 +646,58 @@ async function offlineClearAll(){
 function parseM3U8(text, baseUrl){
   const lines = String(text || '').split(/\r?\n/);
   const segs = [];
+  const variants = [];
   let hasVariant = false;
   let hasKey = false;
+  let mapUri = '';
+  let pendingVariant = null;
   for(const raw of lines){
     const t = raw.trim();
     if(!t) continue;
-    if(t.startsWith('#EXT-X-STREAM-INF')){ hasVariant = true; continue; }
+    if(t.startsWith('#EXT-X-STREAM-INF')){
+      hasVariant = true;
+      const bw = (t.match(/BANDWIDTH=(\d+)/i) || [])[1] || '';
+      const res = (t.match(/RESOLUTION=(\d+x\d+)/i) || [])[1] || '';
+      pendingVariant = { bandwidth: parseInt(bw, 10) || 0, resolution: res || '', url: '' };
+      continue;
+    }
     if(t.startsWith('#EXT-X-KEY')){
       if(!/#EXT-X-KEY:METHOD=NONE/i.test(t)) hasKey = true;
+      continue;
+    }
+    if(t.startsWith('#EXT-X-MAP')){
+      const m = t.match(/URI="([^"]+)"/);
+      if(m && m[1]){
+        try{ mapUri = new URL(m[1], baseUrl).href; }catch(e){ mapUri = m[1]; }
+      }
       continue;
     }
     if(t.startsWith('#')) continue;
     let abs;
     try{ abs = new URL(t, baseUrl).href; }catch(e){ abs = t; }
-    segs.push(abs);
+    if(pendingVariant){
+      pendingVariant.url = abs;
+      variants.push(pendingVariant);
+      pendingVariant = null;
+    }else{
+      segs.push(abs);
+    }
   }
-  return { segs, hasVariant, hasKey };
+  return { segs, hasVariant, hasKey, mapUri, variants };
 }
-
-function buildM3U8WithBlobs(originalText, blobUrls){
+function buildM3U8WithBlobs(originalText, blobUrls, initBlobUrl){
   let i = 0;
   return String(originalText || '').split(/\r?\n/).map(line => {
     const t = line.trim();
-    if(t && !t.startsWith('#')){
-      return blobUrls[i++] || t;
+    if(!t) return line;
+    if(t.startsWith('#EXT-X-MAP')){
+      if(!initBlobUrl) return line;
+      return t.replace(/URI="[^"]*"/, 'URI="' + initBlobUrl + '"');
     }
-    return line;
+    if(t.startsWith('#')) return line;
+    return blobUrls[i++] || t;
   }).join('\n');
 }
-
 function setCacheToast(show, text, pct){
   const el = document.getElementById('cacheToast');
   if(!el) return;
@@ -634,10 +726,6 @@ async function cacheCurrentEpisode(){
   }
 
   const id = movieKey(state.current) + '::' + (state.epIdx || 0);
-  const existing = await offlineGet(id).catch(() => null);
-  if(existing){
-    if(!confirm('本集已经缓存过了，重新缓存会覆盖旧数据，继续？')) return;
-  }
 
   OFFLINE._cancel = false;
   OFFLINE._abortCtrl = new AbortController();
@@ -645,65 +733,143 @@ async function cacheCurrentEpisode(){
   setCacheToast(true, '正在解析 m3u8…', 2);
 
   try{
-    const res = await fetch(url, { signal: abortCtrl.signal });
+    const res = await fetch(proxyUrl(url), { signal: abortCtrl.signal });
     if(!res.ok) throw new Error('m3u8 HTTP ' + res.status);
     const text = await res.text();
-    const parsed = parseM3U8(text, url);
+    let m3u8Text = text; // 【修复】记录"实际用于播放分片的清单"，多码率时必须是子清单
+    let parsed = parseM3U8(text, url);
 
+    // 【优化】多码率主清单：自动选最高清晰度的子清单继续缓存，不再直接拒绝
     if(parsed.hasVariant){
-      setCacheToast(false);
-      return toast('❌ 该资源是多码率清单，暂不支持离线缓存，请换其他线路');
-    }
-    if(parsed.hasKey){
-      setCacheToast(false);
-      return toast('❌ 该资源使用加密分片（AES），暂不支持离线缓存');
-    }
-    if(!parsed.segs.length){
-      setCacheToast(false);
-      return toast('❌ 未解析到分片，无法缓存');
+      const vs = parsed.variants || [];
+      const best = vs.reduce((a, b) => {
+        const sa = (a && (a.bandwidth || a.resolution)) || 0;
+        const sb = (b && (b.bandwidth || b.resolution)) || 0;
+        return sb > sa ? b : a;
+      }, vs[0]);
+      if(!best || !best.url){ setCacheToast(false); return toast('❌ 多码率清单解析失败，请换其他线路'); }
+      setCacheToast(true, '检测到多码率，正在解析最高清晰度…', 5);
+      const res2 = await fetch(proxyUrl(best.url), { signal: abortCtrl.signal });
+      if(!res2.ok) throw new Error('子清单 HTTP ' + res2.status);
+      const text2 = await res2.text();
+      m3u8Text = text2;
+      parsed = parseM3U8(text2, best.url);
+      toast('多码率清单：已自动选择 ' + (best.resolution || (best.bandwidth ? Math.round(best.bandwidth / 1000) + 'Kbps' : '最高清晰度')));
     }
 
-    const CONCURRENCY = Math.min(6, parsed.segs.length);
+    if(parsed.hasVariant){ setCacheToast(false); return toast('❌ 多级多码率清单，暂不支持'); }
+    if(parsed.hasKey){     setCacheToast(false); return toast('❌ AES 加密分片，暂不支持'); }
+    if(!parsed.segs.length){ setCacheToast(false); return toast('❌ 未解析到分片'); }
+
     const total = parsed.segs.length;
-    const blobs = new Array(total);
+
+    // ① 断点续传：先扫描已下载的分片
+    const doneSet = new Set();
     let totalBytes = 0;
-    let doneCount = 0;
+    const CHECK_BATCH = 50;
+    for(let s = 0; s < total; s += CHECK_BATCH){
+      const jobs = [];
+      for(let i = s; i < Math.min(total, s + CHECK_BATCH); i++){
+        jobs.push(offlineGet(id + '::seg::' + i).catch(() => null).then(seg => ({ i, seg })));
+      }
+      (await Promise.all(jobs)).forEach(({ i, seg }) => {
+        if(seg && seg.blob && seg.blob.size > 0){ doneSet.add(i); totalBytes += seg.blob.size; }
+      });
+    }
+    let doneCount = doneSet.size;
+    if(doneCount) toast('检测到已缓存 ' + doneCount + ' 个分片，继续下载剩余部分');
+
+    // ② 单分片下载：30s 超时 + 3 次指数退避重试
+    const SEG_TIMEOUT = 30000;
+    const RETRY       = 3;
+    async function fetchSeg(u, signal){
+      let lastErr;
+      for(let attempt = 0; attempt < RETRY; attempt++){
+        if(OFFLINE._cancel) throw new DOMException('Cancelled','AbortError');
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), SEG_TIMEOUT);
+        const onAbort = () => ctrl.abort();
+        signal.addEventListener('abort', onAbort);
+        try{
+          const r = await fetch(proxyUrl(u), { signal: ctrl.signal }); // 【修复】经本地代理，避开视频站 CORS
+          if(!r.ok) throw new Error('HTTP ' + r.status);
+          const b = await r.blob();
+          if(!b || !b.size) throw new Error('空分片');
+          return b;
+        }catch(e){
+          lastErr = e;
+          if(signal.aborted) throw e;
+          await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+        }finally{
+          clearTimeout(timer);
+          signal.removeEventListener('abort', onAbort);
+        }
+      }
+      throw lastErr;
+    }
+
+    // ③ 边下边写 IndexedDB，失败只记录，不中断全部
+    const CONCURRENCY = 8;
+    const startPct = 5, endPct = 95;
     let cursor = 0;
-    let failedErr = null;
-    const startPct = 5;
-    const endPct = 95;
+    const failedIdx = [];
 
     async function worker(){
       while(true){
         if(OFFLINE._cancel) return;
-        if(failedErr) return;
         const i = cursor++;
         if(i >= total) return;
+        if(doneSet.has(i)) continue;
         try{
-          const r = await fetch(parsed.segs[i], { signal: abortCtrl.signal });
-          if(!r.ok) throw new Error('分片 ' + (i + 1) + ' 下载失败 (HTTP ' + r.status + ')');
-          const b = await r.blob();
-          blobs[i] = b;
-          totalBytes += b.size;
-          doneCount++;
-          const pct = startPct + Math.round(doneCount / total * (endPct - startPct));
+          const b = await fetchSeg(parsed.segs[i], abortCtrl.signal);
+          await offlinePut({ id: id + '::seg::' + i, blob: b });
+          doneSet.add(i); doneCount++; totalBytes += b.size;
           setCacheToast(true,
             '缓存中 ' + doneCount + '/' + total + ' · ' + fmtBytes(totalBytes),
-            pct);
+            startPct + Math.round(doneCount / total * (endPct - startPct)));
         }catch(e){
-          if(e.name === 'AbortError') return;
-          failedErr = e;
-          try{ abortCtrl.abort(); }catch(_){}
-          return;
+          if(e.name === 'AbortError' && OFFLINE._cancel) return;
+          failedIdx.push(i);
         }
       }
     }
-
-    await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, total) }, worker));
 
     if(OFFLINE._cancel) throw new Error('__CANCEL__');
-    if(failedErr) throw failedErr;
-    if(doneCount < total) throw new Error('部分分片下载失败');
+
+    // ④ 失败分片统一重试一轮
+    if(failedIdx.length){
+      setCacheToast(true, '重试 ' + failedIdx.length + ' 个失败分片…', 96);
+      const retryList = failedIdx.splice(0);
+      for(const i of retryList){
+        if(OFFLINE._cancel) throw new Error('__CANCEL__');
+        try{
+          const b = await fetchSeg(parsed.segs[i], abortCtrl.signal);
+          await offlinePut({ id: id + '::seg::' + i, blob: b });
+          doneSet.add(i); doneCount++; totalBytes += b.size;
+        }catch(e){ failedIdx.push(i); }
+      }
+    }
+
+    // ⑤ 仍有失败：保留已完成部分，下次点缓存可续传
+    if(failedIdx.length){
+      setCacheToast(false);
+      throw new Error(failedIdx.length + ' 个分片失败（已保留 ' + doneCount + ' 个，下次点缓存可续传）');
+    }
+
+    // ⑥ fMP4 初始化段
+    let mapBlob = null;
+    if(parsed.mapUri){
+      setCacheToast(true, '正在下载初始化段…', 96);
+      try{
+        mapBlob = await fetchSeg(parsed.mapUri, abortCtrl.signal);
+        await offlinePut({ id: id + '::seg::init', blob: mapBlob });
+        totalBytes += mapBlob.size;
+      }catch(e){
+        setCacheToast(false);
+        throw new Error('INIT 段下载失败，请换线路');
+      }
+    }
 
     const record = {
       id,
@@ -712,28 +878,24 @@ async function cacheCurrentEpisode(){
       pic: state.current.vod_pic || '',
       epIdx: state.epIdx || 0,
       epName: ep.name || ('第' + (state.epIdx + 1) + '集'),
-      m3u8: text,
+      m3u8: m3u8Text, /* 【修复】必须是实际解析分片用的清单（多码率时为子清单） */
       segCount: parsed.segs.length,
       totalBytes,
+      hasInit: !!mapBlob,
       createdAt: Date.now()
     };
 
-    setCacheToast(true, '正在写入本机存储…', 96);
-    const segRecords = blobs.map((b, i) => ({ id: id + '::seg::' + i, blob: b }));
-    await offlinePutMany(segRecords);
+    setCacheToast(true, '正在写入索引…', 98);
     await offlinePut(record);
 
     setCacheToast(true, '✅ 缓存完成 · ' + fmtBytes(totalBytes), 100);
     setTimeout(() => setCacheToast(false), 2000);
     toast('✅ 已缓存：' + record.movieName + ' · ' + record.epName);
+
   }catch(e){
     setCacheToast(false);
-    if(e.message === '__CANCEL__' || e.name === 'AbortError'){
-      toast('已取消缓存');
-    }else{
-      console.warn('[离线缓存]', e);
-      toast('❌ 缓存失败：' + (e.message || '未知错误'));
-    }
+    if(e.message === '__CANCEL__' || e.name === 'AbortError') toast('已取消缓存');
+    else { console.warn('[离线缓存]', e); toast('❌ 缓存失败：' + (e.message || '未知错误')); }
   }finally{
     OFFLINE._abortCtrl = null;
   }
@@ -749,17 +911,33 @@ function fmtBytes(n){
 async function playCachedEpisodeById(id){
   const record = await offlineGet(id);
   if(!record) return toast('缓存不存在');
-  const blobs = [];
-  for(let i = 0; i < record.segCount; i++){
-    const seg = await offlineGet(id + '::seg::' + i);
-    if(!seg || !seg.blob) return toast('缓存分片缺失，请重新缓存');
-    blobs.push(seg.blob);
+  // 【优化】分批并行读取分片，避免数百个分片串行等待
+  const blobs = new Array(record.segCount);
+  const CHUNK = 24;
+  for(let s = 0; s < record.segCount; s += CHUNK){
+    const jobs = [];
+    for(let i = s; i < Math.min(record.segCount, s + CHUNK); i++){
+      jobs.push(offlineGet(id + '::seg::' + i).then(seg => ({ i, seg })));
+    }
+    const res = await Promise.all(jobs);
+    for(const { i, seg } of res){
+      if(!seg || !seg.blob) return toast('缓存分片缺失，请重新缓存');
+      blobs[i] = seg.blob;
+    }
   }
   const blobUrls = blobs.map(b => URL.createObjectURL(b));
+
+  let initBlobUrl = '';
+  if(record.hasInit){
+    const initSeg = await offlineGet(id + '::seg::init');
+    if(initSeg && initSeg.blob) initBlobUrl = URL.createObjectURL(initSeg.blob);
+  }
+
   OFFLINE._blobUrls.forEach(u => { try{ URL.revokeObjectURL(u); }catch(e){} });
   OFFLINE._blobUrls = blobUrls;
+  if(initBlobUrl) OFFLINE._blobUrls.push(initBlobUrl);
 
-  const newM3u8 = buildM3U8WithBlobs(record.m3u8, blobUrls);
+  const newM3u8 = buildM3U8WithBlobs(record.m3u8, blobUrls, initBlobUrl);
   const m3u8Blob = new Blob([newM3u8], { type: 'application/vnd.apple.mpegurl' });
   const m3u8Url = URL.createObjectURL(m3u8Blob);
   OFFLINE._blobUrls.push(m3u8Url);
@@ -893,10 +1071,10 @@ async function deleteOfflineItem(id, segCount){
   for(let i = 0; i < (segCount || 0); i++){
     await offlineDel(id + '::seg::' + i);
   }
+  await offlineDel(id + '::seg::init');
   toast('已删除');
   renderOfflineList();
 }
-
 async function clearAllOffline(){
   if(!confirm('确定要清除全部离线缓存吗？此操作不可恢复。')) return;
   await offlineClearAll();
@@ -1047,10 +1225,10 @@ async function deleteOfflineFromProfile(id, segCount){
   for(let i = 0; i < (segCount || 0); i++){
     await offlineDel(id + '::seg::' + i);
   }
+  await offlineDel(id + '::seg::init');
   toast('已删除');
   renderOfflineInProfile();
 }
-
 async function clearAllOfflineFromProfile(){
   if(!confirm('确定要清除全部离线缓存吗？此操作不可恢复。')) return;
   await offlineClearAll();

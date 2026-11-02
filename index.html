@@ -7,6 +7,8 @@
 <title>澪鸢 · 全网影视搜索</title>
 <!-- 修改处 1：网页图标 favicon -->
 <link rel="icon" href="picture/狂三.png">
+<!-- PWA 安装清单 -->
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://cdn.staticfile.org" crossorigin>
@@ -114,6 +116,7 @@
           <div class="v-danmaku-row" id="vDanmakuRow">
             <input class="v-danmaku-input" id="vDanmakuInput" placeholder="发条弹幕…（回车发送）" maxlength="80">
             <button class="v-danmaku-send" type="button" onclick="sendDanmakuFromInput()">发送</button>
+            <button class="v-danmaku-send" type="button" onclick="openDanmakuBlockCfg()" title="弹幕屏蔽（屏蔽词/屏蔽用户）" style="background:transparent;border:1px solid rgba(255,255,255,.18);color:var(--muted);padding:8px 11px">屏蔽</button>
           </div>
         </div>
         <div class="v-sheet" id="vSheet"></div>
@@ -631,5 +634,13 @@
 <script src="js/core.js"></script>
 <script src="js/ai.js"></script>
 <script src="js/enhanced.js"></script>
+<script>
+// PWA：仅 https / localhost 环境注册（file:// 打开不生效，静默跳过）
+if('serviceWorker' in navigator && /^https?:$/.test(location.protocol)){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('./sw.js').catch(function(){});
+  });
+}
+</script>
 </body>
 </html>

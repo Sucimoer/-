@@ -1,0 +1,16 @@
+{
+  "name": "澪鸢 · 全网影视搜索",
+  "short_name": "澪鸢",
+  "description": "全网影视聚合搜索与播放器",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0a0c10",
+  "theme_color": "#0a0c10",
+  "icons": [
+    { "src": "picture/狂三.png", "sizes": "any", "type": "image/png", "purpose": "any" },
+    { "src": "picture/白.png", "sizes": "any", "type": "image/png", "purpose": "maskable" }
+  ]
+}
